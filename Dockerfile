@@ -32,20 +32,19 @@ RUN composer install --no-dev --optimize-autoloader
 # Set permissions for storage and bootstrap cache
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Clear and cache routes and configurations during build/start
-RUN php artisan config:clear && php artisan route:clear
-
-# Configure Apache document root to point to Laravel's public directory
-RUN sed -i -e 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
-
-# Allow .htaccess overrides so Laravel routing works properly (Fixes 404 errors)
-RUN echo '<Directory /var/www/html/public>\n\
-    Options Indexes FollowSymLinks\n\
-    AllowOverride All\n\
-    Require all granted\n\
-</Directory>' >> /etc/apache2/apache2.conf
+# Explicitly configure Apache VirtualHost to point to Laravel's public directory and allow .htaccess overrides
+RUN echo '<VirtualHost *:80>\n\
+    DocumentRoot /var/www/html/public\n\
+    <Directory /var/www/html/public>\n\
+        Options Indexes FollowSymLinks\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+    ErrorLog ${APACHE_LOG_DIR}/error.log\n\
+    CustomLog ${APACHE_LOG_DIR}/access.log combined\n\
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
 EXPOSE 80
 
-# Start Apache in the foreground and clear cache on start/build if needed
+# Start Apache in the foreground
 CMD ["apache2-foreground"]
