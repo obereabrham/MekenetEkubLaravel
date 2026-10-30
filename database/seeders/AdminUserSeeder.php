@@ -13,10 +13,10 @@ class AdminUserSeeder extends Seeder
         User::updateOrCreate(
             ['username' => 'obere19'], // በ Render Environment Variables ላይ ያስቀመጥከው ዩዘር ስም
             [
-                'first_name' => 'Admin',
-                'last_name' => 'User',
-                'phone' => '19Abrish_@21', // ተስማሚ ስልክ ቁጥር ወይም ፎርማት
-                'password' => Hash::make('19Abrish_@21'), // የይለፍ ቃልህ
+                'first_name' => 'Abrham',
+                'last_name' => 'Tesfaye',
+                'phone' => '19@Abrish_@21', // ተስማሚ ስልክ ቁጥር ወይም ፎርማት
+                'password' => Hash::make('19@Abrish_@21'), // የይለፍ ቃልህ
                 'role' => 'admin', // ሮሉ አድሚን መሆኑን ለማረጋገጥ
             ]
         );
