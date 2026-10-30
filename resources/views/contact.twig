@@ -1,0 +1,11 @@
+{% extends 'base.twig' %}
+{% block title %}Contact Mekenet Ekub{% endblock %}
+{% block content %}
+<section class="contact-hero"><div class="contact-hero-inner"><span class="info-eyebrow">WE’RE HERE TO HELP</span><h1>Let’s talk.</h1><p>Have a question about an Ekub, your account, or how the platform works? Reach out using the contact details below.</p></div></section>
+<section class="contact-layout">
+  <div class="contact-main-card"><div class="contact-card-icon">☎</div><span class="info-eyebrow">CALL US</span><h2>Speak with our team</h2><p>For questions or assistance, call the Mekenet Ekub contact number.</p><a class="contact-phone" href="tel:+251951180317">+251 951 180 317</a><a class="btn btn-primary contact-call-btn" href="tel:+251951180317">Call now <span aria-hidden="true">↗</span></a></div>
+  <div class="contact-side"><article class="contact-detail-card"><div class="detail-icon">🕒</div><div><h3>Working hours</h3><p>Monday – Saturday</p><strong>12:00 AM – 4:00 PM</strong><p><b>Sunday: Closed</b></p><small>Please note the listed hours before calling.</small></div></article><article class="contact-detail-card"><div class="detail-icon">✉️</div><div><h3>Email us</h3><p><a href="mailto:mekenetsupport@gmail.com">mekenetsupport@gmail.com</a></p></div></article><article class="contact-detail-card"><div class="detail-icon">💬</div><div><h3>What can we help with?</h3><p>Questions about finding or joining an Ekub, account access, verification, payment schedules, or understanding platform fees.</p></div></article><article class="contact-detail-card"><div class="detail-icon">🛡️</div><div><h3>Keep your account safe</h3><p>Never share your password or authenticator code with anyone claiming to provide support.</p></div></article></div>
+</section>
+<section class="follow-strip"><div><span class="info-eyebrow">FOLLOW US</span><h2>Stay connected with Mekenet Ekub</h2><p>Follow our official pages for news and updates.</p></div>{% include '_social_links.twig' %}</section>
+<section class="contact-bottom"><div><h2>Looking for an Ekub?</h2><p>You can browse available groups and review their details directly on the website.</p></div><a class="btn btn-outline" href="{{url_for('ekubs')}}">View available Ekubs <span aria-hidden="true">→</span></a></section>
+{% endblock %}

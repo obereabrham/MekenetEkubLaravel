@@ -1,0 +1,21 @@
+{% extends 'base.twig' %}{% block title %}Deleted Accounts | Admin{% endblock %}{% block content %}
+<div class="container admin-members-page">
+  <div class="admin-tool-head"><div><span class="admin-eyebrow">ADMIN CONTROL</span><h1>Deleted Accounts</h1><p>Members who deleted their own account, with the reason they gave.</p></div><div class="payment-summary"><span class="payment-summary-icon">&#128465;</span><div><strong>{{rows|length}}</strong><small>Deleted</small></div></div></div>
+  <div class="member-search" style="display:flex;gap:8px;margin:0 0 16px"><input type="search" id="memberSearch" placeholder="Search by name, username, phone, email or reason..." style="flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text)"><button type="button" id="memberSearchBtn" class="btn btn-primary" style="min-width:52px" aria-label="Search">&#128269;</button></div>
+  <div class="table-wrap"><table class="table">
+    <tr><th>#</th><th>Name / Username</th><th>Phone / Email</th><th>Reason</th><th>Details</th><th>Deleted on</th></tr>
+    {% for r in rows %}
+    <tr data-member-row data-search="{{r.full_name}} {{r.username}} {{r.phone}} {{r.email|default('')}} {{r.reason}} {{r.details|default('')}}">
+      <td>{{loop.index}}</td>
+      <td>{{r.full_name}}<br><small>@{{r.username}}</small></td>
+      <td>{{r.phone}}<br><small>{{r.email|default('')}}</small></td>
+      <td><strong>{{r.reason}}</strong></td>
+      <td>{{r.details|default('—')}}</td>
+      <td>{{r.deleted_at}}</td>
+    </tr>
+    {% else %}<tr><td colspan="6" style="text-align:center">No accounts have been deleted.</td></tr>{% endfor %}
+  </table></div>
+  <p id="memberNoMatch" style="display:none;text-align:center;color:var(--muted);padding:20px">No accounts match your search.</p>
+</div>
+<script>(function(){var i=document.getElementById('memberSearch'),b=document.getElementById('memberSearchBtn');function f(){var q=(i.value||'').toLowerCase().trim().split(/\s+/).filter(Boolean),n=0;document.querySelectorAll('[data-member-row]').forEach(function(r){var t=(r.dataset.search||r.textContent).toLowerCase(),ok=q.every(function(x){return t.indexOf(x)>-1});r.style.display=ok?'':'none';if(ok)n++});var e=document.getElementById('memberNoMatch');if(e)e.style.display=n?'none':'block'}i.addEventListener('input',f);b.addEventListener('click',f);i.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();f()}})})();</script>
+{% endblock %}

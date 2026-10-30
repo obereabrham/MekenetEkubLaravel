@@ -1,0 +1,94 @@
+{% extends 'base.twig' %}{% block title %}Settings | Mekenet Ekub{% endblock %}{% block content %}
+<div class="settings-page">
+  <a class="settings-back" href="{{ me and me.role == 'member' ? url_for('profile') : url_for('home') }}">&larr; Back</a>
+  <h1>Settings</h1>
+  <p class="settings-sub">Manage your password, read our policies{% if me and me.role == 'member' %} or delete your account{% endif %}.</p>
+
+  <section class="settings-card">
+    <details class="settings-details" {% if request.args.get('open') == 'password' %}open{% endif %}>
+      <summary><span class="settings-row-icon">&#128274;</span><span class="settings-row-text"><strong>Change Password</strong><small>Use a strong password you do not use anywhere else.</small></span><span class="settings-chevron">&rsaquo;</span></summary>
+      <form method="post" action="{{url_for('change_password')}}" class="pm-form" autocomplete="off">{{ csrf_field() }}
+        <label for="current_password">Current password</label>
+        <input id="current_password" name="current_password" type="password" autocomplete="current-password" required>
+        <label for="new_password">New password</label>
+        <input id="new_password" name="new_password" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="confirm_password">Confirm new password</label>
+        <input id="confirm_password" name="confirm_password" type="password" autocomplete="new-password" minlength="8" required>
+        {% if me and me.role in ['admin','partner'] and twofa_on %}
+        {% if twofa_method == 'email' %}<button class="btn btn-secondary" type="submit" formaction="{{url_for('send_security_code')}}" formmethod="post" name="open" value="password" formnovalidate>Send email security code</button>{% endif %}
+        <label for="pw_auth_code">{% if twofa_method == 'email' %}Email security code{% else %}Authenticator code{% endif %}</label>
+        <input id="pw_auth_code" name="auth_code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" required>
+        {% endif %}
+        <small class="settings-hint">At least 8 characters with an uppercase letter, a number and a special character.</small>
+        <button class="btn btn-primary" type="submit">Update password</button>
+      </form>
+    </details>
+    {% if me and me.role == 'admin' %}
+    <details class="settings-details" {% if request.args.get('open') == 'username' %}open{% endif %}>
+      <summary><span class="settings-row-icon">&#128100;</span><span class="settings-row-text"><strong>Change Username</strong><small>Current username: {{me.username}}</small></span><span class="settings-chevron">&rsaquo;</span></summary>
+      <form method="post" action="{{url_for('change_username')}}" class="pm-form" autocomplete="off">{{ csrf_field() }}
+        <label for="new_username">New username</label>
+        <input id="new_username" name="new_username" type="text" minlength="3" maxlength="30" pattern="[A-Za-z0-9_.]{3,30}" required>
+        <label for="un_current_password">Current password</label>
+        <input id="un_current_password" name="current_password" type="password" autocomplete="current-password" required>
+        {% if twofa_on and twofa_method == 'email' %}<button class="btn btn-secondary" type="submit" formaction="{{url_for('send_security_code')}}" formmethod="post" name="open" value="username" formnovalidate>Send email security code</button>{% endif %}
+        {% if twofa_on %}<label for="un_auth_code">{% if twofa_method == 'email' %}Email security code{% else %}Authenticator code{% endif %}</label>
+        <input id="un_auth_code" name="auth_code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="6-digit code" required>
+        {% endif %}
+        <small class="settings-hint">Letters, numbers, dot or underscore (3-30 characters).</small>
+        <button class="btn btn-primary" type="submit">Update username</button>
+      </form>
+    </details>
+    <a class="settings-row" href="{{url_for('security_2fa')}}"><span class="settings-row-icon">&#128241;</span><span class="settings-row-text"><strong>Two-factor security</strong><small>{% if twofa_on %}{% if twofa_method == 'email' %}Email OTP enabled.{% else %}Authenticator app enabled.{% endif %}{% else %}Not enabled - configure an authenticator app or email OTP.{% endif %}</small></span><span class="settings-chevron">&rsaquo;</span></a>
+    {% endif %}
+    <a class="settings-row" href="{{url_for('terms')}}"><span class="settings-row-icon">&#128196;</span><span class="settings-row-text"><strong>Terms of Service</strong><small>Service fee, late payment and verification rules.</small></span><span class="settings-chevron">&rsaquo;</span></a>
+    <a class="settings-row" href="{{url_for('privacy')}}"><span class="settings-row-icon">&#128737;</span><span class="settings-row-text"><strong>Privacy Policy</strong><small>How we collect, use and protect your information.</small></span><span class="settings-chevron">&rsaquo;</span></a>
+  </section>
+
+  {% if me and me.role == 'member' %}
+  <section class="settings-card settings-danger">
+    <h2>Delete account</h2>
+    <p class="settings-sub">This permanently removes your profile, KYC documents and payment methods. You cannot delete your account while you are in a running Ekub.</p>
+    <button type="button" class="btn-danger" id="openDelete">Delete Account</button>
+  </section>
+
+  <div class="settings-modal" id="deleteModal" hidden>
+    <div class="settings-modal-box" role="dialog" aria-modal="true" aria-labelledby="delTitle">
+      <h2 id="delTitle">Delete your account?</h2>
+      <p class="settings-sub">Please tell us why you are leaving, then confirm with your password.</p>
+      <form method="post" action="{{url_for('delete_account')}}" id="deleteForm">{{ csrf_field() }}
+        <div class="reason-list">
+          {% for r in reasons %}
+          <label class="reason-item"><input type="radio" name="reason" value="{{r}}" required><span>{{r}}</span></label>
+          {% endfor %}
+        </div>
+        <textarea name="details" id="delDetails" rows="3" maxlength="500" placeholder="Tell us more (required for Other)"></textarea>
+        <label for="delPassword">Password</label>
+        <input id="delPassword" name="password" type="password" autocomplete="current-password" required>
+        <div class="settings-modal-actions">
+          <button type="button" class="btn-cancel" id="closeDelete">Cancel</button>
+          <button type="submit" class="btn-danger">Delete my account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <script>
+  (function(){
+    var m=document.getElementById('deleteModal'),o=document.getElementById('openDelete'),c=document.getElementById('closeDelete'),f=document.getElementById('deleteForm'),d=document.getElementById('delDetails');
+    if(!m||!o)return;
+    function open(){m.hidden=false;document.body.style.overflow='hidden'}
+    function close(){m.hidden=true;document.body.style.overflow=''}
+    o.addEventListener('click',open);c.addEventListener('click',close);
+    m.addEventListener('click',function(e){if(e.target===m)close()});
+    document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!m.hidden)close()});
+    f.addEventListener('submit',function(e){
+      var r=f.querySelector('input[name=reason]:checked');
+      if(r&&r.value==='Other'&&!d.value.trim()){e.preventDefault();d.focus();alert('Please tell us the reason in the text box.');return}
+      e.preventDefault();
+      MK.confirm('This cannot be undone. Delete your account now?',function(){f.submit()},{confirmText:'Yes, delete my account',danger:true});
+    });
+  })();
+  </script>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends 'base.twig' %}
+{% block title %}Finished Ekubs | Mekenet Ekub{% endblock %}
+{% block content %}
+<div class="container fin-page">
+  <div class="fin-head">
+    <span class="fin-eyebrow">COMPLETED</span>
+    <h1>Finished Ekubs</h1>
+    <p>Ekubs where every period already has a winner. A fresh copy of each finished Ekub is created automatically on the Available Ekubs page.</p>
+  </div>
+
+  {% if ekubs %}
+  <div class="fin-grid">
+    {% for e in ekubs %}
+    <article class="fin-card">
+      <div class="fin-card-top">
+        <span class="fin-badge">{{e.category}}</span>
+        <span class="fin-done">✓ Finished</span>
+      </div>
+      <h3>{{e.name}}</h3>
+      <div class="fin-meta">
+        <div><small>Payment</small><strong>{{e.frequency}}</strong></div>
+        <div><small>Contribution</small><strong>{{format_amount(e.base_amount)}} ETB</strong></div>
+        <div><small>Periods</small><strong>{{e.duration}}</strong></div>
+        <div><small>Members</small><strong>{{e.member_count}}</strong></div>
+        <div><small>Finished</small><strong>{{((e.finished_at|default(''))|slice(0, 10))|default('—')}}</strong></div>
+      </div>
+
+      {% if e.winners %}
+      <details class="fin-winners">
+        <summary>Winners ({{e.winners|length}})</summary>
+        <ol>
+          {% for w in e.winners %}
+          <li><span>Period {{w.period_no}}</span><strong>{{w.first_name}} {{w.last_name}}</strong></li>
+          {% endfor %}
+        </ol>
+      </details>
+      {% endif %}
+
+      <div class="fin-actions">
+        <a class="btn ghost" href="{{url_for('ekub_detail', ekub_id: e.id)}}">Details</a>
+        {% if e.new_ekub_id %}<a class="btn" href="{{url_for('ekub_detail', ekub_id: e.new_ekub_id)}}">New Ekub →</a>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="fin-empty"><div class="fin-empty-icon">🏁</div><h3>No finished Ekubs yet</h3><p>An Ekub appears here after all of its periods have a winner.</p></div>
+  {% endif %}
+</div>
+
+<style>
+.fin-page{padding-top:26px;padding-bottom:50px}
+.fin-eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.12em;opacity:.65}
+.fin-head h1{margin:4px 0 6px}.fin-head p{margin:0 0 20px;opacity:.7;max-width:640px}
+.fin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:14px}
+.fin-card{padding:14px;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:14px;background:var(--surface,#fff);box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.fin-card h3{margin:10px 0;font-size:1.02rem;overflow-wrap:anywhere}
+.fin-card-top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fin-badge{font-size:.68rem;font-weight:800;padding:4px 9px;border-radius:999px;background:rgba(37,99,235,.1);color:var(--primary,#2563eb)}
+.fin-done{font-size:.72rem;font-weight:800;color:#16803c}
+.fin-meta{display:grid;gap:6px;margin-bottom:10px}.fin-meta div{display:flex;justify-content:space-between;gap:8px;font-size:.82rem}.fin-meta small{opacity:.6}
+.fin-winners{margin:8px 0;font-size:.82rem}.fin-winners summary{cursor:pointer;font-weight:800}
+.fin-winners ol{margin:8px 0 0;padding-left:18px;max-height:150px;overflow:auto}.fin-winners li{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.fin-actions{display:flex;gap:8px;margin-top:10px}.fin-actions .btn{flex:1;text-align:center;padding:8px 10px;font-size:.82rem}
+.fin-empty{text-align:center;padding:50px 20px;border:1px dashed var(--border,rgba(127,127,127,.3));border-radius:16px}
+.fin-empty-icon{font-size:2.2rem}
+@media(max-width:600px){.fin-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.fin-card{padding:10px}}
+@media(max-width:340px){.fin-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}

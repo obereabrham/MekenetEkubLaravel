@@ -1,0 +1,30 @@
+{% if site_ads and me and me.role == 'member' %}
+<div class="ad-slider" id="adSlider" aria-label="Advertisements">
+  <div class="ad-track" id="adTrack">
+    {% for img in site_ads %}<div class="ad-slide"><img src="{{url_for('static', filename: 'uploads/' ~ img)}}" alt="Advertisement {{loop.index}}"></div>{% endfor %}
+  </div>
+  {% if site_ads|length > 1 %}
+  <div class="ad-dots">{% for img in site_ads %}<button type="button" class="ad-dot{% if loop.first %} active{% endif %}" data-i="{{loop.index0}}" aria-label="Ad {{loop.index}}"></button>{% endfor %}</div>
+  {% endif %}
+</div>
+<style>
+.ad-slider{position:relative;max-width:1100px;margin:14px auto;border-radius:14px;overflow:hidden;box-shadow:0 8px 22px rgba(0,0,0,.15);aspect-ratio:1100/130;background:#0b1220}
+.ad-track{display:flex;height:100%;transition:transform .6s ease}
+.ad-slide{flex:0 0 100%;height:100%}
+.ad-slide img{width:100%;height:100%;object-fit:cover;display:block}
+.ad-dots{position:absolute;bottom:6px;left:0;right:0;display:flex;justify-content:center;gap:6px}
+.ad-dot{width:7px;height:7px;border-radius:50%;border:0;padding:0;background:rgba(255,255,255,.55);cursor:pointer}
+.ad-dot.active{background:#fff;transform:scale(1.25)}
+@media(max-width:600px){.ad-slider{margin:10px 12px;border-radius:10px;aspect-ratio:1100/200}}
+</style>
+<script>
+(function(){
+  var r=document.getElementById('adSlider');if(!r)return;
+  var tr=document.getElementById('adTrack'),n=tr.children.length,d=r.querySelectorAll('.ad-dot'),i=0,t;
+  function show(k){if(d[i])d[i].classList.remove('active');i=(k+n)%n;tr.style.transform='translateX(-'+(i*100)+'%)';if(d[i])d[i].classList.add('active');}
+  function start(){if(n>1){clearInterval(t);t=setInterval(function(){show(i+1)},4000);}}
+  d.forEach(function(b){b.addEventListener('click',function(){show(+b.dataset.i);start();})});
+  start();
+})();
+</script>
+{% endif %}

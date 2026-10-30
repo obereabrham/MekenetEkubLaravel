@@ -1,0 +1,23 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="container payment-status-page">
+  <div class="ps-head">
+    <div><span class="admin-eyebrow">ADMIN CONTROL</span><h1>Payment Status</h1><p>Monitor payment status for every member of each started Ekub.</p></div>
+    <div class="ps-count"><strong>{{ekubs|length}}</strong><span>Started Ekubs</span></div>
+  </div>
+  <div class="ps-grid">
+    {% for e in ekubs %}
+    <article class="ps-card">
+      <div class="ps-card-head"><div><span class="ps-category">{{e.category}}</span><h2>{{e.name}}</h2><p>{{e.frequency}} · Period {{e.current_period}} / {{e.duration}}</p></div><span class="ps-started">Started</span></div>
+      <div class="ps-stats"><div><small>Members</small><b>{{e.member_count}}</b></div><div class="paid"><small>Paid</small><b>{{e.paid_count|default(0)}}</b></div><div class="unpaid"><small>Unpaid</small><b>{{e.unpaid_count|default(0)}}</b></div></div>
+      <a class="ps-detail" href="{{url_for('admin_payment_status_detail', ekub_id: e.id)}}">View Payment Details <span>→</span></a>
+    </article>
+    {% else %}
+    <div class="ps-empty"><div class="ps-empty-icon">◷</div><h2>No started Ekubs</h2><p>Payment status will appear here after an Ekub is started.</p></div>
+    {% endfor %}
+  </div>
+</div>
+<style>
+.payment-status-page{max-width:1220px;padding:35px 20px 70px}.ps-head{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:24px}.ps-head h1{margin:5px 0}.ps-head p{margin:0;color:var(--muted)}.ps-count{padding:14px 20px;border:1px solid var(--border);background:var(--surface);border-radius:16px;text-align:center;box-shadow:var(--shadow)}.ps-count strong{display:block;font-size:24px;color:var(--text)}.ps-count span{font-size:11px;color:var(--muted)}.ps-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.ps-card,.ps-empty{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);overflow:hidden}.ps-card{padding:20px}.ps-card-head{display:flex;justify-content:space-between;gap:12px}.ps-category{font-size:10px;font-weight:900;padding:6px 9px;border-radius:99px;background:var(--green-light);color:var(--green-dark)}.ps-card h2{margin:12px 0 4px;color:var(--text);font-size:1.2rem}.ps-card p{margin:0;color:var(--muted);font-size:12px}.ps-started{height:max-content;padding:6px 9px;border-radius:99px;background:rgba(34,197,94,.12);color:#16803c;font-size:10px;font-weight:900}.ps-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:20px 0}.ps-stats div{padding:12px 8px;border-radius:12px;background:var(--surface-2);border:1px solid var(--border);text-align:center}.ps-stats small{display:block;color:var(--muted);font-size:10px}.ps-stats b{display:block;color:var(--text);font-size:18px;margin-top:3px}.ps-stats .paid b{color:#16a05a}.ps-stats .unpaid b{color:#dc7a1d}.ps-detail{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-radius:12px;text-decoration:none;background:linear-gradient(135deg,var(--green),var(--blue));color:#fff;font-weight:800;font-size:12px}.ps-empty{grid-column:1/-1;text-align:center;padding:60px 20px}.ps-empty-icon{width:54px;height:54px;margin:auto auto 12px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,var(--green),var(--blue));color:#fff;font-size:24px}.ps-empty h2{color:var(--text)}.ps-empty p{color:var(--muted)}@media(max-width:950px){.ps-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.ps-head{align-items:flex-start;flex-direction:column}.ps-count{width:100%}.ps-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}

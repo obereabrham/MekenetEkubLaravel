@@ -1,0 +1,702 @@
+{% extends 'base.twig' %}
+
+{% block title %}Available Ekubs - Mekenet Ekub{% endblock %}
+
+{% block content %}
+
+<section class="page-header">
+    <div class="container">
+        <div class="page-header-content">
+            <span class="section-badge">EKUB COMMUNITY</span>
+            <h1>Available <span>Ekubs</span></h1>
+            <p>
+                Explore available Mekenet Ekubs and choose an Ekub
+                that matches your preferred category and payment frequency.
+            </p>
+        </div>
+    </div>
+</section>
+
+<section class="ekub-section">
+    <div class="container">
+
+
+    <!-- Filter Area -->
+    <div class="ekub-filter-card">
+
+        <div class="filter-group">
+            <label for="categoryFilter">Category</label>
+
+            <select id="categoryFilter">
+                <option value="all">All Categories</option>
+                {% for value in ekubs|map(attribute: 'category')|select|unique|sort %}
+                <option value="{{value}}">{{value}}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group">
+            <label for="frequencyFilter">Payment Frequency</label>
+
+            <select id="frequencyFilter">
+                <option value="all">All Frequencies</option>
+                {% for value in ekubs|map(attribute: 'frequency')|select|unique|sort %}
+                <option value="{{value}}">{{value}}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="filter-group search-group">
+            <label for="ekubSearch">Search</label>
+
+            <div class="ekub-search-control" style="display:flex;align-items:stretch;gap:8px;">
+                <input
+                    type="search"
+                    id="ekubSearch"
+                    placeholder="Search Ekub..."
+                    aria-label="Search Ekubs"
+                    style="flex:1;min-width:0;"
+                >
+                <button
+                    type="button"
+                    id="ekubSearchButton"
+                    class="btn btn-primary"
+                    aria-label="Search"
+                    title="Search"
+                    onclick="filterEkubs()"
+                    style="min-width:52px;display:inline-flex;align-items:center;justify-content:center;"
+                >
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="11" cy="11" r="7"></circle>
+                        <path d="m20 20-4-4"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+
+    <!-- Ekub Grid -->
+    <div id="ekubGrid" class="ekub-groups">
+
+        {% if ekubs %}
+
+          {% for category_name, group_items in ekubs|groupby('category') %}
+          <section class="ekub-category-group" data-group="{{category_name}}">
+            <div class="ekub-category-head">
+                <span class="ekub-category-title">{{category_name}}</span>
+                <span class="ekub-category-count">{{group_items|length}} Ekub{% if group_items|length != 1 %}s{% endif %}</span>
+            </div>
+            <div class="ekub-grid">
+
+            {% for ekub in group_items %}
+
+            <article
+                class="ekub-card animated-card"
+                data-category="{{ekub['category']}}"
+                data-frequency="{{ekub['frequency']}}"
+                data-name="{{ekub['name']|lower}}"
+            >
+
+                <div class="ekub-card-top">
+
+                    <div class="ekub-icon">
+                        {% if ekub['category'] == 'Student' %}
+                            🎓
+                        {% elseif ekub['category'] == 'Merkato Merchants' %}
+                            🏪
+                        {% elseif ekub['category'] == 'Teachers' %}
+                            📚
+                        {% elseif ekub['category'] == 'Drivers' %}
+                            🚗
+                        {% elseif ekub['category'] == 'Government Employees' %}
+                            🏛️
+                        {% elseif ekub['category'] == 'Items Ekub' %}
+                            📦
+                        {% else %}
+                            💰
+                        {% endif %}
+                    </div>
+
+                    <span class="status-badge">
+                        {{ekub['status']|default('Open')}}
+                    </span>
+
+                </div>
+
+
+                <div class="ekub-card-body">
+
+                    <h2>{{ekub['name']}}</h2>
+
+                    <p class="ekub-category">
+                        {{ekub['category']}}
+                    </p>
+
+                    <div class="ekub-info-list">
+
+                        <div class="ekub-info-row">
+                            <span>Frequency</span>
+                            <strong>
+                                {{ekub['frequency']}}
+                            </strong>
+                        </div>
+
+                        <div class="ekub-info-row">
+                            <span>Base Amount</span>
+                            <strong>
+                                {{format_amount(ekub['base_amount'])}} ETB
+                            </strong>
+                        </div>
+
+                        <div class="ekub-info-row">
+                            <span>Periods</span>
+                            <strong>
+                                {{ekub['duration']}}
+                            </strong>
+                        </div>
+
+                        <div class="ekub-info-row">
+                            <span>Members</span>
+                            <strong>
+                                {{ekub['member_count']|default(0)}}/{{ekub['max_members']|default(0)}}
+                                {% if ekub|get('is_full') %}<span class="full-badge">Full</span>{% endif %}
+                            </strong>
+                        </div>
+
+                    </div>
+
+
+                    <!-- Potential payout -->
+                    <div class="payout-box">
+
+                        <span>Potential Net Payout</span>
+
+                        <strong>
+                            {{format_amount(
+                                (ekub['base_amount'] * ekub['duration']) * 0.98
+                            )}}
+                            ETB
+                        </strong>
+
+                        <small>
+                            After 2% service fee
+                        </small>
+
+                    </div>
+
+                </div>
+
+
+                <div class="ekub-card-footer">
+
+                    <a
+                        href="{{url_for('ekub_detail', ekub_id: ekub['id'])}}"
+                        class="btn btn-secondary"
+                    >
+                        Details
+                    </a>
+
+                    {% if ekub|get('joined') %}
+
+                        <span class="already-joined">
+                            ✓ Joined
+                        </span>
+
+                    {% elseif ekub|get('is_full') %}
+
+                        <span class="already-joined ekub-full-note">Full</span>
+
+                    {% else %}
+
+                        <button
+                            type="button"
+                            class="btn btn-primary"
+                            onclick="openJoinModal({{ekub['id']}}, '{{ekub['name']|e}}', '{{ekub['category']|e}}')"
+                        >
+                            Join Ekub
+                        </button>
+
+                    {% endif %}
+
+                </div>
+
+            </article>
+
+            {% endfor %}
+
+            </div>
+          </section>
+          {% endfor %}
+
+        {% else %}
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    🔎
+                </div>
+
+                <h2>No Available Ekubs</h2>
+
+                <p>
+                    There are currently no open Ekubs available for joining.
+                </p>
+
+                <a
+                    href="{{url_for('dashboard')}}"
+                    class="btn btn-primary"
+                >
+                    Back to Dashboard
+                </a>
+
+            </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+</section>
+
+<!-- JOIN EKUB MODAL -->
+
+<div id="joinModal" class="modal-overlay">
+
+
+<div class="modal-card">
+
+    <button
+        type="button"
+        class="modal-close"
+        onclick="closeJoinModal()"
+    >
+        ×
+    </button>
+
+    <div class="modal-icon">
+        🤝
+    </div>
+
+    <h2>Join Ekub</h2>
+
+    <p id="joinEkubName">
+        Select your share type.
+    </p>
+
+
+    <!-- KYC Warning -->
+    <div
+        id="kycWarning"
+        class="kyc-warning"
+        style="display:none;"
+    >
+
+        <strong>⚠ KYC Verification Required</strong>
+
+        <p>
+            You must complete and receive KYC approval before
+            joining an active Ekub.
+        </p>
+
+        <a
+            href="{{url_for('profile')}}"
+            class="btn btn-primary"
+        >
+            Complete KYC
+        </a>
+
+    </div>
+
+
+    <!-- Share Selection -->
+    <div
+        id="shareSelection"
+        class="share-selection"
+    >
+
+        <p class="selection-title">
+            Choose your share
+        </p>
+
+        <label class="share-option">
+
+            <input
+                type="radio"
+                name="share_type"
+                value="full"
+                checked
+            >
+
+            <span>
+                <strong>Full Share</strong>
+                <small>100% of base amount</small>
+            </span>
+
+        </label>
+
+
+        <label class="share-option">
+
+            <input
+                type="radio"
+                name="share_type"
+                value="half"
+            >
+
+            <span>
+                <strong>Half Share</strong>
+                <small>50% of base amount</small>
+            </span>
+
+        </label>
+
+
+        <label class="share-option">
+
+            <input
+                type="radio"
+                name="share_type"
+                value="quarter"
+            >
+
+            <span>
+                <strong>Quarter Share</strong>
+                <small>25% of base amount</small>
+            </span>
+
+        </label>
+
+
+        <div
+            id="itemEkubMessage"
+            class="info-message"
+            style="display:none;"
+        >
+            📦 Item Ekub supports Full Share only.
+        </div>
+
+
+        <div class="service-fee-notice">
+
+            <strong>2% Service Fee</strong>
+
+            <p>
+                A 2% service fee is deducted from the
+                total amount received by the winner.
+                The winner receives 98% of the collected pool.
+            </p>
+
+        </div>
+
+
+        <div class="late-payment-notice">
+
+            <strong>Late Payment</strong>
+
+            <p>
+                Payments made after the required due date
+                may receive an automated late-payment penalty.
+            </p>
+
+        </div>
+
+
+        <form
+           id="joinForm"
+           method="POST"
+           action="{{url_for('join_ekub_legacy')}}"
+            >{{ csrf_field() }}
+
+            <input
+                type="hidden"
+                id="selectedEkubId"
+                name="ekub_id"
+            >
+
+            <input
+                type="hidden"
+                id="selectedShareType"
+                name="share_type"
+                value="full"
+            >
+
+            <button
+                type="submit"
+                class="btn btn-primary btn-large"
+            >
+                Confirm & Join
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+
+let selectedEkubCategory = "";
+
+// Build filter choices from the actual Ekub records, so new categories and
+// frequencies are included automatically (not limited to a hard-coded list).
+const normalizeFilterValue = value => (value || "")
+    .toString().normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+
+document.addEventListener("DOMContentLoaded", () => {
+    const cards = Array.from(document.querySelectorAll(".ekub-card"));
+    const populateChoices = (selectId, dataKey) => {
+        const select = document.getElementById(selectId);
+        if (!select || select.options.length > 1) return;
+        const values = new Map();
+        cards.forEach(card => {
+            const raw = (card.dataset[dataKey] || "").trim().replace(/\s+/g, " ");
+            const key = normalizeFilterValue(raw);
+            if (key && !values.has(key)) values.set(key, raw);
+        });
+        [...values.values()].sort((a, b) => a.localeCompare(b)).forEach(value => {
+            select.add(new Option(value, value));
+        });
+    };
+    populateChoices("categoryFilter", "category");
+    populateChoices("frequencyFilter", "frequency");
+    const category = document.getElementById("categoryFilter");
+    const requestedCategory = new URLSearchParams(window.location.search).get("category");
+    if (category && requestedCategory) {
+        const wanted = normalizeFilterValue(requestedCategory);
+        const option = Array.from(category.options).find(opt => normalizeFilterValue(opt.value) === wanted);
+        if (option) category.value = option.value;
+    }
+    const frequency = document.getElementById("frequencyFilter");
+    const search = document.getElementById("ekubSearch");
+    const searchButton = document.getElementById("ekubSearchButton");
+    if (category) category.addEventListener("change", filterEkubs);
+    if (frequency) frequency.addEventListener("change", filterEkubs);
+    if (search) {
+        search.addEventListener("input", filterEkubs);
+        search.addEventListener("keydown", event => {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                filterEkubs();
+            }
+        });
+    }
+    if (searchButton) searchButton.addEventListener("click", filterEkubs);
+    filterEkubs();
+});
+
+function filterEkubs() {
+    const categoryEl = document.getElementById("categoryFilter");
+    const frequencyEl = document.getElementById("frequencyFilter");
+    const searchEl = document.getElementById("ekubSearch");
+    const category = normalizeFilterValue(categoryEl?.value || "all");
+    const frequency = normalizeFilterValue(frequencyEl?.value || "all");
+    const terms = normalizeFilterValue(searchEl?.value || "").split(" ").filter(Boolean);
+    const cards = Array.from(document.querySelectorAll(".ekub-card"));
+    let visibleCount = 0;
+
+    cards.forEach(card => {
+        const cardCategory = normalizeFilterValue(card.dataset.category);
+        const cardFrequency = normalizeFilterValue(card.dataset.frequency);
+        const cardName = normalizeFilterValue(card.dataset.name);
+        // Search by Ekub name (also category and frequency).
+        const searchable = `${cardName} ${cardCategory} ${cardFrequency}`;
+        const matches = (category === "all" || cardCategory === category) &&
+            (frequency === "all" || cardFrequency === frequency) &&
+            terms.every(term => searchable.includes(term));
+
+        card.hidden = !matches;
+        card.style.display = matches ? "" : "none";
+        if (matches) {
+            visibleCount++;
+            card.classList.add("visible");
+        } else {
+            card.classList.remove("visible");
+        }
+    });
+
+    document.querySelectorAll(".ekub-category-group").forEach(group => {
+        const any = Array.from(group.querySelectorAll(".ekub-card")).some(c => c.style.display !== "none");
+        group.style.display = any ? "" : "none";
+    });
+
+    let empty = document.getElementById("ekubFilterEmpty");
+    const grid = document.getElementById("ekubGrid");
+    if (!empty && grid) {
+        empty = document.createElement("p");
+        empty.id = "ekubFilterEmpty";
+        empty.className = "filter-empty-state";
+        empty.textContent = "No Ekubs match your filters. Try changing your search or filters.";
+        empty.setAttribute("role", "status");
+        grid.appendChild(empty);
+    }
+    if (empty) empty.hidden = visibleCount > 0;
+}
+
+
+/* ================================
+   OPEN JOIN MODAL
+================================ */
+
+function openJoinModal(id, name, category) {
+
+    selectedEkubCategory = category;
+
+    document.getElementById("selectedEkubId").value = id;
+
+    document.getElementById("joinEkubName").innerHTML =
+        "You are joining <strong>" +
+        escapeHtml(name) +
+        "</strong>.";
+
+    const modal =
+        document.getElementById("joinModal");
+
+    modal.classList.add("active");
+
+
+    const shareOptions =
+        document.querySelectorAll(
+            'input[name="share_type"]'
+        );
+
+    const itemMessage =
+        document.getElementById("itemEkubMessage");
+
+
+    if (
+        category.toLowerCase() === "items ekub" ||
+        category.toLowerCase() === "item's ekub"
+    ) {
+
+        shareOptions.forEach(option => {
+
+            option.checked = option.value === "full";
+
+            if (option.value !== "full") {
+                option.disabled = true;
+            }
+
+        });
+
+        itemMessage.style.display = "block";
+
+    } else {
+
+        shareOptions.forEach(option => {
+            option.disabled = false;
+        });
+
+        itemMessage.style.display = "none";
+
+    }
+
+    updateShareType();
+
+}
+
+
+/* ================================
+   CLOSE JOIN MODAL
+================================ */
+
+function closeJoinModal() {
+
+    document
+        .getElementById("joinModal")
+        .classList.remove("active");
+
+}
+
+
+/* ================================
+   SHARE TYPE
+================================ */
+
+function updateShareType() {
+
+    const selected =
+        document.querySelector(
+            'input[name="share_type"]:checked'
+        );
+
+    if (selected) {
+
+        document.getElementById(
+            "selectedShareType"
+        ).value = selected.value;
+
+    }
+
+}
+
+
+document
+    .querySelectorAll('input[name="share_type"]')
+    .forEach(input => {
+
+        input.addEventListener(
+            "change",
+            updateShareType
+        );
+
+    });
+
+
+/* ================================
+   CLOSE MODAL BY BACKGROUND
+================================ */
+
+document
+    .getElementById("joinModal")
+    .addEventListener("click", function(event) {
+
+        if (event.target === this) {
+            closeJoinModal();
+        }
+
+    });
+
+
+/* ================================
+   HTML ESCAPE
+================================ */
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+}
+
+
+/* ================================
+   INITIALIZE
+================================ */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        filterEkubs();
+
+    }
+);
+
+</script>
+
+{% endblock %}

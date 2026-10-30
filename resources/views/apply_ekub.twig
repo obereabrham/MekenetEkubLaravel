@@ -1,0 +1,78 @@
+{% extends 'base.twig' %}
+{% block title %}Apply Ekub | Mekenet Ekub{% endblock %}
+{% block content %}
+<div class="container apply-page">
+  <div class="apply-head">
+    <span class="apply-eyebrow">REQUEST A NEW EKUB</span>
+    <h1>Apply Ekub</h1>
+    <p>Choose the Ekub style you want. When the admin approves it, the Ekub is created automatically and appears on the Available Ekubs page.</p>
+  </div>
+
+  <div class="apply-layout">
+    <form method="post" class="apply-card" autocomplete="off">{{ csrf_field() }}
+      <h2>Ekub style</h2>
+      <label for="ap-name">Ekub name</label>
+      <input id="ap-name" name="name" maxlength="80" placeholder="e.g. Teachers Monthly Ekub" value="{{form|get('name','')}}" required>
+
+      <label for="ap-cat">Category</label>
+      <select id="ap-cat" name="category" required>
+        {% for x in categories %}<option value="{{x}}" {% if form|get('category')==x %}selected{% endif %}>{{x}}</option>{% endfor %}
+      </select>
+
+      <label for="ap-freq">Payment frequency</label>
+      <select id="ap-freq" name="frequency" required>
+        {% for x in frequencies %}<option value="{{x}}" {% if form|get('frequency')==x %}selected{% endif %}>{{x}}</option>{% endfor %}
+      </select>
+
+      <div class="apply-row">
+        <div><label for="ap-amt">Contribution (ETB)</label><input id="ap-amt" name="base_amount" type="number" min="1" step="0.01" value="{{form|get('base_amount','')}}" required></div>
+        <div><label for="ap-dur">Periods / members</label><input id="ap-dur" name="duration" type="number" min="2" max="500" value="{{form|get('duration','')}}" required></div>
+      </div>
+
+      <label for="ap-note">Note to admin (optional)</label>
+      <textarea id="ap-note" name="note" rows="3" maxlength="500" placeholder="Anything the admin should know">{{form|get('note','')}}</textarea>
+
+      <button class="btn btn-primary" type="submit">Send application</button>
+    </form>
+
+    <section class="apply-card">
+      <h2>My applications</h2>
+      {% if applications %}
+      <ul class="apply-list">
+        {% for a in applications %}
+        <li>
+          <div class="apply-list-top"><strong>{{a.name}}</strong><span class="apply-status st-{{a.status}}">{{a.status|capitalize}}</span></div>
+          <small>{{a.category}} · {{a.frequency}} · {{format_amount(a.base_amount)}} ETB · {{a.duration}} periods</small>
+          {% if a.status == 'approved' and a.created_ekub_id %}<a class="apply-link" href="{{url_for('ekub_detail', ekub_id: a.created_ekub_id)}}">View the new Ekub →</a>{% endif %}
+          {% if a.status == 'rejected' and a.rejection_reason %}<small class="apply-reason">Reason: {{a.rejection_reason}}</small>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="apply-empty">You have not applied for an Ekub yet.</p>{% endif %}
+    </section>
+  </div>
+</div>
+
+<style>
+.apply-page{padding-top:26px;padding-bottom:50px}
+.apply-eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.12em;opacity:.65}
+.apply-head h1{margin:4px 0 6px}.apply-head p{margin:0 0 20px;opacity:.7;max-width:640px}
+.apply-layout{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:start}
+.apply-card{padding:18px;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:16px;background:var(--surface,#fff)}
+.apply-card h2{margin:0 0 12px;font-size:1.1rem}
+.apply-card label{display:block;margin:12px 0 5px;font-weight:700;font-size:.86rem}
+.apply-card input,.apply-card select,.apply-card textarea{width:100%;box-sizing:border-box}
+.apply-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.apply-card .btn{margin-top:16px;width:100%}
+.apply-list{list-style:none;margin:0;padding:0;display:grid;gap:10px;max-height:480px;overflow:auto}
+.apply-list li{padding:11px;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:12px;display:grid;gap:4px}
+.apply-list-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.apply-list small{opacity:.7}
+.apply-status{font-size:.68rem;font-weight:800;padding:3px 9px;border-radius:999px;background:rgba(127,127,127,.15)}
+.st-pending{background:rgba(245,158,11,.16);color:#a15c00}.st-approved{background:rgba(34,197,94,.16);color:#16803c}.st-rejected{background:rgba(220,38,38,.14);color:#b42318}
+.apply-link{font-size:.82rem;font-weight:800}.apply-reason{color:#b42318;opacity:1!important}
+.apply-empty{opacity:.65}
+@media(max-width:800px){.apply-layout{grid-template-columns:1fr}}
+@media(max-width:480px){.apply-card{padding:14px}.apply-row{grid-template-columns:1fr}}
+</style>
+{% endblock %}

@@ -1,0 +1,535 @@
+{% extends 'base.twig' %}
+
+{% block title %}
+Create Account | Mekenet Ekub
+{% endblock %}
+
+
+{% block content %}
+
+<section class="auth-page register-page">
+
+    <div class="auth-decoration auth-decoration-one"></div>
+    <div class="auth-decoration auth-decoration-two"></div>
+
+
+    <div class="auth-card register-card">
+
+        <div class="auth-logo">
+
+            <div class="brand-icon large">
+                M
+            </div>
+
+        </div>
+
+
+        <div class="auth-heading">
+
+            <span class="eyebrow">
+                JOIN MEKENET EKUB
+            </span>
+
+            <h1>
+                Create your
+                <span>account</span>
+            </h1>
+
+            <p>
+                Register to access digital Ekub services.
+            </p>
+
+        </div>
+
+
+        <form
+            method="POST"
+            action="{{url_for('register')}}"
+            class="auth-form"
+            id="registerForm"
+            novalidate
+        >{{ csrf_field() }}
+
+
+            <!-- NAME -->
+
+            <div class="form-row">
+
+                <div class="form-group">
+
+                    <label for="first_name">
+                        First Name
+                    </label>
+
+                    <div class="input-wrapper">
+
+                        <input
+                            type="text"
+                            id="first_name"
+                            name="first_name"
+                            placeholder="First name"
+                            autocomplete="given-name"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="last_name">
+                        Last Name
+                    </label>
+
+                    <div class="input-wrapper">
+
+                        <input
+                            type="text"
+                            id="last_name"
+                            name="last_name"
+                            placeholder="Last name"
+                            autocomplete="family-name"
+                            required
+                        >
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- USERNAME -->
+
+            <div class="form-group">
+
+                <label for="username">
+                    Username
+                </label>
+
+                <div class="input-wrapper">
+
+                    <span class="input-icon">
+                        @
+                    </span>
+
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Choose a unique username"
+                        autocomplete="username"
+                        minlength="3"
+                        required
+                    >
+
+                </div>
+
+                <small class="field-help">
+                    Your username must be unique.
+                </small>
+
+            </div>
+
+
+            <!-- PHONE -->
+
+            <div class="form-group">
+
+                <label for="phone">
+                    Phone Number
+                    <span class="required-star">*</span>
+                </label>
+
+                <div class="phone-input">
+
+                    <span class="country-code">
+                        +251
+                    </span>
+
+                    <input
+                        type="tel"
+                        id="phone"
+                        name="phone"
+                        placeholder="9XXXXXXXX"
+                        maxlength="9"
+                        inputmode="numeric"
+                        autocomplete="tel"
+                        required
+                    >
+
+                </div>
+
+                <small class="field-help">
+                    Enter 9 digits starting with 9.
+                    Example: 911234567
+                </small>
+
+            </div>
+
+
+            <!-- EMAIL -->
+
+            <div class="form-group">
+
+                <label for="email">
+                    Email address
+                    <span class="required-star">*</span>
+                </label>
+
+                <div class="input-wrapper">
+
+                    <span class="input-icon">
+                        @
+                    </span>
+
+                    <input
+                        type="email"
+                        id="email"
+                        name="email"
+                        placeholder="you@example.com"
+                        autocomplete="email"
+                        required
+                    >
+
+                </div>
+
+                <small class="field-help">
+                    Use an email address you can access for account updates.
+                </small>
+
+            </div>
+
+
+            <!-- PASSWORD -->
+
+            <div class="form-group">
+
+                <label for="password">
+                    Password
+                </label>
+
+                <div class="input-wrapper">
+
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Create a strong password"
+                        autocomplete="new-password"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="password-toggle"
+                        onclick="togglePassword('password', this)"
+                    >
+                        Show
+                    </button>
+
+                </div>
+
+
+                <div class="password-rules">
+
+                    <div
+                        class="password-rule"
+                        id="ruleLength"
+                    >
+                        <span>○</span>
+                        Minimum 8 characters
+                    </div>
+
+                    <div
+                        class="password-rule"
+                        id="ruleUpper"
+                    >
+                        <span>○</span>
+                        At least one uppercase letter
+                    </div>
+
+                    <div
+                        class="password-rule"
+                        id="ruleNumber"
+                    >
+                        <span>○</span>
+                        At least one number
+                    </div>
+
+                    <div
+                        class="password-rule"
+                        id="ruleSpecial"
+                    >
+                        <span>○</span>
+                        At least one special character
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- CONFIRM PASSWORD -->
+
+            <div class="form-group">
+
+                <label for="confirm_password">
+                    Confirm Password
+                </label>
+
+                <div class="input-wrapper">
+
+                    <input
+                        type="password"
+                        id="confirm_password"
+                        name="confirm_password"
+                        placeholder="Repeat your password"
+                        autocomplete="new-password"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="password-toggle"
+                        onclick="togglePassword('confirm_password', this)"
+                    >
+                        Show
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <!-- TERMS -->
+
+            <div class="terms-box">
+
+                <label class="checkbox-label">
+
+                    <input
+                        type="checkbox"
+                        name="terms"
+                        value="1"
+                        id="terms"
+                        required
+                    >
+
+                    <span>
+                        I agree to the
+                        <button
+                            type="button"
+                            class="terms-link"
+                            onclick="openModal('termsModal')"
+                        >
+                            Mekenet Ekub Terms & Agreement
+                        </button>
+                    </span>
+
+                </label>
+
+                <p>
+                    I understand that a 2% service fee is deducted
+                    from the gross amount received by an Ekub winner,
+                    and that late payment penalties may apply.
+                </p>
+
+            </div>
+
+
+            <!-- SUBMIT -->
+
+            <button
+                type="submit"
+                class="btn btn-primary btn-large auth-submit"
+            >
+
+                <span>
+                    Create Account
+                </span>
+
+                <span>
+                    →
+                </span>
+
+            </button>
+
+        </form>
+
+
+        <div class="auth-register">
+
+            <p>
+                Already have an account?
+            </p>
+
+            <a
+                href="{{url_for('login')}}"
+                class="register-link"
+            >
+                Sign in
+                →
+            </a>
+
+        </div>
+
+
+        <div class="security-note">
+
+            <span>
+                🔐
+            </span>
+
+            <p>
+                Your account information is protected
+                using secure password hashing.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =====================================================
+     TERMS MODAL
+====================================================== -->
+
+<div
+    class="modal-overlay"
+    id="termsModal"
+>
+
+    <div class="modal-card terms-modal">
+
+        <button
+            type="button"
+            class="modal-close"
+            onclick="closeModal('termsModal')"
+        >
+            ×
+        </button>
+
+
+        <div class="modal-icon">
+            📜
+        </div>
+
+
+        <h2>
+            Mekenet Ekub
+            Terms & Agreement
+        </h2>
+
+
+        <div class="terms-content">
+
+            <h3>
+                1. Membership
+            </h3>
+
+            <p>
+                Members must provide accurate information during
+                registration and KYC verification.
+            </p>
+
+
+            <h3>
+                2. KYC Verification
+            </h3>
+
+            <p>
+                KYC verification is required before a member can
+                join an active Ekub.
+            </p>
+
+
+            <h3>
+                3. 2% Service Fee
+            </h3>
+
+            <p>
+                A 2% service fee is deducted from the gross amount
+                received by the winning member.
+            </p>
+
+            <div class="fee-example">
+
+                <strong>
+                    Example
+                </strong>
+
+                <span>
+                    Gross payout: 100,000 ETB
+                </span>
+
+                <span>
+                    Service fee: 2,000 ETB
+                </span>
+
+                <span>
+                    Net payout: 98,000 ETB
+                </span>
+
+            </div>
+
+
+            <h3>
+                4. Late Payment
+            </h3>
+
+            <p>
+                Payments made after the applicable payment deadline
+                may be subject to the configured late-payment penalty.
+            </p>
+
+
+            <h3>
+                5. Payment Verification
+            </h3>
+
+            <p>
+                Payment transactions and screenshots may be reviewed
+                before a payment is marked as approved.
+            </p>
+
+
+            <h3>
+                6. Account Security
+            </h3>
+
+            <p>
+                Members are responsible for protecting their login
+                credentials and must not share their password.
+            </p>
+
+
+            <h3>
+                7. Agreement
+            </h3>
+
+            <p>
+                By registering, you confirm that you have read,
+                understood and accepted these rules.
+            </p>
+
+        </div>
+
+
+        <button
+            type="button"
+            class="btn btn-primary"
+            onclick="acceptTerms()"
+        >
+            I Understand
+        </button>
+
+    </div>
+
+</div>
+
+{% endblock %}

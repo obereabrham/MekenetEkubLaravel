@@ -1,0 +1,23 @@
+{% extends 'base.twig' %}{% block title %}Privacy Policy | Mekenet Ekub{% endblock %}{% block content %}
+<div class="settings-page legal-page">
+  <h1>Privacy Policy</h1>
+  <p class="settings-sub">How Mekenet Ekub collects, uses and protects your information.</p>
+  <section class="settings-card legal-card">
+    <h3>Information we collect</h3>
+    <p>Your name, username, phone number and email; KYC details (date of birth, gender, ID or passport number and images, personal photo and video agreement); payment records including transaction numbers and receipt screenshots; and the bank accounts you save to receive payouts.</p>
+    <h3>How we use it</h3>
+    <p>To verify your identity, run Ekub groups, confirm contributions, send payment reminders and security codes, pay out winners, and prevent fraud or abuse of the platform.</p>
+    <h3>Who can see it</h3>
+    <p>Only authorised Mekenet Ekub administrators and partners with the matching permission can review KYC and payment information. We do not sell your personal information. Other members cannot see your documents or bank details.</p>
+    <h3>Security</h3>
+    <p>Passwords and email one-time codes are protected. If you enable email OTP or an authenticator app, a second code is required after your password at sign-in. Keep your password and verification codes private.</p>
+    <h3>Retention and account deletion</h3>
+    <p>You can delete your account from Settings at any time when you are not in a running Ekub. Deleting removes your profile, KYC documents and saved payment methods. Past contribution and payout records may be kept in anonymised form for accounting and audit purposes, and we keep the reason you give for leaving.</p>
+    <h3>Suspended accounts</h3>
+    <p>If an account is suspended for breaking our rules, we keep its phone number and email on record so the same details cannot be used to register again.</p>
+    <h3>Your choices</h3>
+    <p>You can update your profile, change your password, manage saved payment methods and choose your two-factor method in your account. For any privacy question please use the <a href="{{url_for('contact')}}">Contact</a> page.</p>
+    <p class="settings-hint">See also our <a href="{{url_for('terms')}}">Terms of Service</a>.</p>
+  </section>
+</div>
+{% endblock %}

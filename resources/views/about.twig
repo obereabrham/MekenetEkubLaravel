@@ -1,0 +1,29 @@
+{% extends 'base.twig' %}
+{% block title %}About Mekenet Ekub{% endblock %}
+{% block content %}
+<section class="info-hero about-hero">
+  <div class="info-hero-inner">
+    <span class="info-eyebrow">OUR STORY · ስለ እኛ</span>
+    <h1>Saving together.<br><span>Growing together.</span></h1>
+    <p>Mekenet Ekub brings the familiar tradition of እቁብ into a more organized digital experience—helping members explore groups, understand the rules, and follow their participation in one place.</p>
+    <a class="btn btn-primary info-hero-btn" href="{{url_for('ekubs')}}">Explore available Ekubs <span aria-hidden="true">→</span></a>
+  </div>
+  <div class="hero-art" aria-hidden="true"><div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div><div class="art-coin">M<span>+</span></div><div class="art-note note-one">🤝 <b>Community</b></div><div class="art-note note-two">✦ <b>Shared goals</b></div></div>
+</section>
+<section class="info-section">
+  <div class="info-section-heading"><span class="info-eyebrow">THE IDEA</span><h2>A familiar tradition, with helpful digital tools</h2><p>Ekub is built around people contributing regularly and taking turns receiving a pooled amount. Mekenet Ekub is designed to make the group information and participation process easier to follow.</p></div>
+  <div class="info-feature-grid">
+    <article class="info-feature"><div class="feature-icon">🧭</div><h3>Clear group details</h3><p>Review each Ekub’s category, contribution frequency, base amount, duration, and member capacity before deciding whether to join.</p></article>
+    <article class="info-feature"><div class="feature-icon">📋</div><h3>Organized participation</h3><p>Use your account to keep track of the Ekubs you join and view relevant group and payment information.</p></article>
+    <article class="info-feature"><div class="feature-icon">🔐</div><h3>Account protection</h3><p>Account access uses your password, with optional email OTP or an authenticator app for an additional layer of protection.</p></article>
+  </div>
+</section>
+<section class="info-section rules-section">
+  <div class="rules-copy"><span class="info-eyebrow">HOW IT WORKS</span><h2>Understand the steps before you join</h2><p>Every group can have its own schedule and capacity. Check the details shown on the Ekub page and make sure the contribution plan fits your needs.</p>
+    <ol class="steps-list"><li><span>01</span><div><h3>Explore</h3><p>Browse available Ekubs and compare their categories, schedules, and contribution amounts.</p></div></li><li><span>02</span><div><h3>Review and verify</h3><p>Read the group details and complete any required account or identity verification steps.</p></div></li><li><span>03</span><div><h3>Participate</h3><p>Choose an eligible share option where offered, then follow the group’s payment schedule and updates.</p></div></li></ol>
+  </div>
+  <aside class="fee-card"><div class="fee-symbol">%</div><span class="info-eyebrow">SERVICE FEE</span><div class="fee-number">2<span>%</span></div><h3>Service fee on payout</h3><p>The platform’s stated fee is 2% of the collected pool. The winner receives the remaining 98%, subject to the group’s applicable rules.</p><div class="fee-divider"></div><small>Review the displayed payout estimate and terms before joining.</small></aside>
+</section>
+<section class="follow-strip"><div><span class="info-eyebrow">FOLLOW US</span><h2>Join our community online</h2><p>Follow our official pages for news and updates.</p></div>{% include '_social_links.twig' %}</section>
+<section class="info-cta"><div><span class="info-eyebrow">READY TO TAKE A LOOK?</span><h2>Find an Ekub that fits your plan.</h2><p>Explore the available groups and read their details at your own pace.</p></div><a href="{{url_for('ekubs')}}" class="btn btn-primary">Browse Ekubs <span aria-hidden="true">→</span></a></section>
+{% endblock %}

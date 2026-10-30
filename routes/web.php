@@ -1,0 +1,95 @@
+<?php
+use App\Http\Controllers\WebsiteController as Site;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', [Site::class,'home'])->name('home');
+Route::get('/home', [Site::class,'homePage'])->name('home_page');
+Route::get('/about', [Site::class,'about'])->name('about');
+Route::get('/contact', [Site::class,'contact'])->name('contact');
+Route::get('/terms', [Site::class,'terms'])->name('terms');
+Route::get('/privacy', [Site::class,'privacy'])->name('privacy');
+Route::get('/ekubs', [Site::class,'ekubsIndex'])->name('ekubs');
+Route::get('/ekub/{ekubId}', [Site::class,'ekubDetail'])->whereNumber('ekubId')->name('ekub_detail');
+Route::match(['get','post'], '/register', [Site::class,'register'])->name('register');
+Route::match(['get','post'], '/login', [Site::class,'login'])->name('login');
+Route::match(['get','post'], '/verify-login', [Site::class,'verifyLogin'])->name('verify_login');
+Route::get('/admin', [Site::class,'adminLogin'])->name('admin_root');
+Route::match(['get','post'], '/admin/login', [Site::class,'adminLogin'])->name('admin_login');
+Route::match(['get','post'], '/partner/login', [Site::class,'partnerLogin'])->name('partner_login');
+Route::get('/uploads/{name}', [Site::class,'uploads'])->where('name','.*')->name('uploads');
+
+Route::middleware('auth.session')->group(function () {
+    Route::get('/logout', [Site::class,'logout'])->name('logout');
+    Route::get('/api/dashboard/stats', [Site::class,'dashboardStats'])->name('dashboard_stats_api');
+    Route::get('/dashboard', [Site::class,'dashboard'])->name('dashboard');
+    Route::get('/profile', [Site::class,'profile'])->name('profile');
+    Route::post('/profile/edit/{field}', [Site::class,'profileEdit'])->name('profile_edit');
+    Route::post('/profile/picture', [Site::class,'profilePicture'])->name('profile_picture_update');
+    Route::match(['get','post'], '/kyc', [Site::class,'kyc'])->name('kyc');
+    Route::match(['get','post'], '/security/2fa', [Site::class,'security2fa'])->name('security_2fa');
+    Route::post('/security/2fa/confirm', [Site::class,'confirm2fa'])->name('confirm_2fa');
+    Route::match(['get','post'], '/join/{ekubId}', [Site::class,'joinEkub'])->whereNumber('ekubId')->name('join_ekub');
+    Route::post('/join-ekub', [Site::class,'joinLegacy'])->name('join_ekub_legacy');
+    Route::get('/my-ekubs', [Site::class,'myEkubs'])->name('my_ekubs');
+    Route::post('/leave-ekub/{ekubId}', [Site::class,'leaveEkub'])->whereNumber('ekubId')->name('leave_ekub');
+    Route::get('/status', [Site::class,'status'])->name('status');
+    Route::get('/my-status', [Site::class,'myStatus'])->name('my_status');
+    Route::match(['get','post'], '/pay/{ekubId}/{periodNo}', [Site::class,'pay'])->whereNumber('ekubId')->whereNumber('periodNo')->name('pay');
+    Route::match(['get','post'], '/payment-methods', [Site::class,'paymentMethods'])->name('payment_methods');
+    Route::post('/payment-methods/{pmId}/delete', [Site::class,'paymentMethodDelete'])->whereNumber('pmId')->name('payment_method_delete');
+    Route::post('/payment-methods/{pmId}/default', [Site::class,'paymentMethodDefault'])->whereNumber('pmId')->name('payment_method_default');
+    Route::get('/settings', [Site::class,'settings'])->name('settings');
+    Route::post('/settings/security-code', [Site::class,'sendSecurityEmailOtp'])->name('send_security_code');
+    Route::post('/settings/username', [Site::class,'changeUsername'])->name('change_username');
+    Route::post('/settings/password', [Site::class,'changePassword'])->name('change_password');
+    Route::post('/settings/delete-account', [Site::class,'deleteAccount'])->name('delete_account');
+    Route::match(['get','post'], '/apply-ekub', [Site::class,'applyEkub'])->middleware('role:member')->name('apply_ekub');
+    Route::get('/finished-ekubs', [Site::class,'finishedEkubs'])->name('finished_ekubs');
+});
+
+Route::middleware('role:admin')->group(function () {
+    Route::get('/admin/dashboard', [Site::class,'adminDashboard'])->name('admin_dashboard');
+    Route::get('/admin/full-ekubs', [Site::class,'adminFullEkubs'])->name('admin_full_ekubs');
+    Route::get('/admin/pick-winners', [Site::class,'adminPickWinners'])->name('admin_pick_winners');
+    Route::match(['get','post'], '/admin/ekubs/create', [Site::class,'createEkub'])->name('create_ekub');
+    Route::match(['get','post'], '/admin/ekubs/{ekubId}/edit', [Site::class,'editEkub'])->whereNumber('ekubId')->name('admin_edit_ekub');
+    Route::post('/admin/ekubs/{ekubId}/delete', [Site::class,'deleteEkub'])->whereNumber('ekubId')->name('admin_delete_ekub');
+    Route::get('/admin/ekubs/{ekubId}/information', [Site::class,'adminEkubInformation'])->whereNumber('ekubId')->name('admin_ekub_information');
+    Route::post('/admin/ekubs/{ekubId}/start', [Site::class,'startEkub'])->whereNumber('ekubId')->name('start_ekub');
+    Route::get('/admin/payment-approval', [Site::class,'adminPaymentApproval'])->name('admin_payment_approval');
+    Route::get('/admin/payment-approval/ekub/{ekubId}', [Site::class,'adminPaymentApprovalEkub'])->whereNumber('ekubId')->name('admin_payment_approval_ekub');
+    Route::get('/admin/payment-approval-all', [Site::class,'adminPaymentApprovalAll'])->name('admin_payment_approval_all');
+    Route::get('/admin/payments/{ekubId}/{periodNo}', [Site::class,'adminPayments'])->whereNumber('ekubId')->whereNumber('periodNo')->name('admin_payments');
+    Route::get('/admin/kyc', [Site::class,'adminKyc'])->name('admin_kyc');
+    Route::get('/admin/members', [Site::class,'adminMembers'])->name('admin_members');
+    Route::get('/admin/deleted-accounts', [Site::class,'adminDeletedAccounts'])->name('admin_deleted_accounts');
+    Route::get('/admin/suspend', [Site::class,'adminSuspendMembers'])->name('admin_suspend_members');
+    Route::post('/admin/members/{userId}/{action}', [Site::class,'memberSuspendAction'])->whereNumber('userId')->name('member_suspend_action');
+    Route::match(['get','post'], '/admin/partners', [Site::class,'partners'])->name('partners');
+    Route::post('/admin/partners/{pid}/delete', [Site::class,'deletePartner'])->whereNumber('pid')->name('delete_partner');
+    Route::match(['get','post'], '/admin/winners/{ekubId}/{periodNo}', [Site::class,'pickWinner'])->whereNumber('ekubId')->whereNumber('periodNo')->name('pick_winner');
+    Route::get('/admin/ads', [Site::class,'adminAds'])->name('admin_ads');
+    Route::post('/admin/ads/{slot}', [Site::class,'adminAdSave'])->whereNumber('slot')->name('admin_ad_save');
+    Route::post('/admin/ads/{slot}/delete', [Site::class,'adminAdDelete'])->whereNumber('slot')->name('admin_ad_delete');
+    Route::get('/admin/applied-ekubs', [Site::class,'adminAppliedEkubs'])->name('admin_applied_ekubs');
+    Route::post('/admin/applied-ekubs/{appId}/approve', [Site::class,'approveApplication'])->whereNumber('appId')->name('admin_approve_application');
+    Route::post('/admin/applied-ekubs/{appId}/reject', [Site::class,'rejectApplication'])->whereNumber('appId')->name('admin_reject_application');
+});
+
+Route::middleware('role:admin,partner')->group(function () {
+    Route::get('/partner', [Site::class,'partnerDashboard'])->name('partner_dashboard');
+    Route::get('/admin/payment-status', [Site::class,'adminPaymentStatus'])->name('admin_payment_status');
+    Route::get('/admin/payment-status/{ekubId}', [Site::class,'adminPaymentStatusDetail'])->whereNumber('ekubId')->name('admin_payment_status_detail');
+    Route::post('/admin/payment-status/{ekubId}/remind', [Site::class,'sendPaymentReminder'])->whereNumber('ekubId')->name('admin_send_payment_reminder');
+    Route::post('/admin/payment/{paymentId}/{action}', [Site::class,'paymentAction'])->whereNumber('paymentId')->name('payment_action');
+    Route::post('/admin/kyc/{kycId}/{action}', [Site::class,'kycAction'])->whereNumber('kycId')->name('kyc_action');
+    Route::get('/partner/payment-approval', [Site::class,'partnerPaymentApproval'])->name('partner_payment_approval');
+    Route::get('/partner/payment-approval/ekub/{ekubId}', [Site::class,'partnerPaymentApprovalEkub'])->whereNumber('ekubId')->name('partner_payment_approval_ekub');
+    Route::get('/partner/payment-approval-all', [Site::class,'partnerPaymentApprovalAll'])->name('partner_payment_approval_all');
+    Route::get('/partner/payment/{ekubId}/{periodNo}', [Site::class,'partnerPayment'])->whereNumber('ekubId')->whereNumber('periodNo')->name('partner_payment');
+    Route::get('/partner/members', [Site::class,'partnerMembers'])->name('partner_members');
+    Route::get('/partner/kyc', [Site::class,'partnerKyc'])->name('partner_kyc');
+    Route::get('/admin/recent-winners', [Site::class,'recentWinners'])->name('recent_winners');
+    Route::get('/partner/recent-winners', [Site::class,'recentWinners']);
+    Route::post('/recent-winners/{payoutId}/send', [Site::class,'recentWinnerSend'])->whereNumber('payoutId')->name('recent_winner_send');
+});

@@ -1,0 +1,257 @@
+{% extends 'base.twig' %}
+
+{% block title %}
+Sign In | Mekenet Ekub
+{% endblock %}
+
+
+{% block content %}
+
+<section class="auth-page">
+
+    <div class="auth-decoration auth-decoration-one"></div>
+    <div class="auth-decoration auth-decoration-two"></div>
+
+
+    <div class="auth-card">
+
+        <div class="auth-logo">
+            <div class="brand-icon large">
+                M
+            </div>
+        </div>
+
+
+        <div class="auth-heading">
+
+            <span class="eyebrow">
+                WELCOME BACK
+            </span>
+
+            <h1>
+                Sign in to
+                <span>Mekenet Ekub</span>
+            </h1>
+
+            <p>
+                Use the same login page for Member, Partner, and Admin accounts. Your account role is detected automatically after you sign in.
+            </p>
+
+        </div>
+
+
+        {% if registered %}
+
+            <div class="success-banner">
+
+                <span class="success-check">
+                    ✓
+                </span>
+
+                <div>
+                    <strong>
+                        Account created successfully
+                    </strong>
+
+                    <small>
+                        Please sign in using your new account.
+                    </small>
+                </div>
+
+            </div>
+
+        {% endif %}
+
+
+        <form
+            method="POST"
+            action="{{url_for('login')}}"
+            class="auth-form"
+            novalidate
+        >{{ csrf_field() }}
+
+            <div class="form-group">
+
+                <label for="identifier">
+                    Username, Phone or Email
+                </label>
+
+                <div class="input-wrapper">
+
+                    <span class="input-icon">
+                        ◉
+                    </span>
+
+                    <input
+                        type="text"
+                        id="identifier"
+                        name="identifier"
+                        placeholder="Username, +2519..., or email"
+                        autocomplete="username"
+                        required
+                    >
+
+                </div>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="password">
+                    Password
+                </label>
+
+                <div class="input-wrapper">
+
+                    <span class="input-icon">
+                        ◆
+                    </span>
+
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Enter your password"
+                        autocomplete="current-password"
+                        required
+                    >
+
+                    <button
+                        type="button"
+                        class="password-toggle"
+                        onclick="togglePassword('password', this)"
+                    >
+                        Show
+                    </button>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-options">
+
+                <label class="remember-option">
+
+                    <input
+                        type="checkbox"
+                        name="remember"
+                    >
+
+                    <span>
+                        Remember me
+                    </span>
+
+                </label>
+
+
+                <a
+                    href="#"
+                    onclick="showComingSoon(event)"
+                >
+                    Forgot password?
+                </a>
+
+            </div>
+
+
+            <button
+                type="submit"
+                class="btn btn-primary btn-large auth-submit"
+            >
+
+                <span>
+                    Sign In
+                </span>
+
+                <span>
+                    →
+                </span>
+
+            </button>
+
+        </form>
+
+
+        <div class="auth-divider">
+            <span>
+                OR
+            </span>
+        </div>
+
+
+        <div class="auth-register">
+
+            <p>
+                Don't have a member account?
+            </p>
+
+            <a
+                href="{{url_for('register')}}"
+                class="register-link"
+            >
+                Create your Mekenet account
+                →
+            </a>
+
+        </div>
+
+
+        <div class="security-note">
+
+            <span>
+                🔒
+            </span>
+
+            <p>
+                One secure login for all account types. Admin and Partner accounts go directly to their authorized dashboards.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- LOGIN WELCOME POPUP -->
+
+<div
+    class="modal-overlay"
+    id="welcomeModal"
+>
+
+    <div class="modal-card success-modal">
+
+        <button
+            class="modal-close"
+            onclick="closeModal('welcomeModal')"
+        >
+            ×
+        </button>
+
+        <div class="success-animation">
+            ✓
+        </div>
+
+        <h2>
+            Welcome Back
+        </h2>
+
+        <p>
+            You have successfully signed in.
+        </p>
+
+        <button
+            class="btn btn-primary"
+            onclick="closeModal('welcomeModal')"
+        >
+            Continue
+        </button>
+
+    </div>
+
+</div>
+
+{% endblock %}

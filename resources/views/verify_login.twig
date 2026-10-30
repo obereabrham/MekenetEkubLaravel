@@ -1,0 +1,63 @@
+{% extends 'base.twig' %}
+{% block title %}Two-factor verification | Mekenet Ekub{% endblock %}
+{% block content %}
+<section class="auth-page">
+  <div class="auth-card">
+    {% if method == 'both' %}
+      <h1>Choose a verification method</h1>
+      <p>Use either your authenticator app or an email code sent to {{email}}.</p>
+      <div class="auth-form">
+        <h2>Email code</h2>
+        {% if email_pending %}
+          <p>Enter the six-digit sign-in code. It expires in 10 minutes.</p>
+          <form method="post" class="auth-form">{{ csrf_field() }}
+            <input type="hidden" name="action" value="verify_email">
+            <label for="email_code">Email verification code</label>
+            <input id="email_code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+            <button class="btn btn-primary btn-large" type="submit">Verify with email</button>
+          </form>
+          <form method="post" class="auth-form">{{ csrf_field() }}
+            <input type="hidden" name="action" value="resend">
+            <button class="btn btn-secondary" type="submit">Resend email code</button>
+          </form>
+        {% else %}
+          <form method="post">{{ csrf_field() }}
+            <input type="hidden" name="action" value="send_email">
+            <button class="btn btn-secondary" type="submit">Send code to {{email}}</button>
+          </form>
+        {% endif %}
+      </div>
+      <div class="auth-form">
+        <h2>Authenticator app</h2>
+        <p>Enter the current six-digit code from your authenticator app.</p>
+        <form method="post" class="auth-form">{{ csrf_field() }}
+          <input type="hidden" name="action" value="verify_authenticator">
+          <label for="authenticator_code">Authenticator code</label>
+          <input id="authenticator_code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required>
+          <button class="btn btn-primary btn-large" type="submit">Verify with authenticator</button>
+        </form>
+      </div>
+    {% elseif method == 'email' %}
+      <h1>Email verification</h1>
+      <p>Enter the six-digit sign-in code sent to {{email}}. The code expires in 10 minutes.</p>
+      <form method="post" class="auth-form">{{ csrf_field() }}
+        <label for="code">Email verification code</label>
+        <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+        <button class="btn btn-primary btn-large" type="submit">Verify and continue</button>
+      </form>
+      <form method="post" class="auth-form">{{ csrf_field() }}
+        <input type="hidden" name="action" value="resend">
+        <button class="btn btn-secondary" type="submit">Resend email code</button>
+      </form>
+    {% else %}
+      <h1>Authenticator verification</h1>
+      <p>Enter the current 6-digit code from your authenticator app to finish signing in.</p>
+      <form method="post" class="auth-form">{{ csrf_field() }}
+        <label for="code">Authenticator code</label>
+        <input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" required autofocus>
+        <button class="btn btn-primary btn-large" type="submit">Verify and continue</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

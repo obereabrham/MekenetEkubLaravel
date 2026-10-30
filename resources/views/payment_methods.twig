@@ -1,0 +1,42 @@
+{% extends 'base.twig' %}{% block title %}Payment Methods | Mekenet Ekub{% endblock %}{% block content %}
+<div class="settings-page">
+  <a class="settings-back" href="{{url_for('profile')}}">&larr; My Profile</a>
+  <h1>Payment Methods</h1>
+  <p class="settings-sub">Save the bank account or mobile wallet where you want to receive your Ekub payout. Your default account is shown to the admin for payouts.</p>
+
+  <section class="settings-card">
+    <h2>Add payment method</h2>
+    <form method="post" class="pm-form" autocomplete="off">{{ csrf_field() }}
+      <label for="bank_name">Bank</label>
+      <select id="bank_name" name="bank_name" required>
+        <option value="" disabled selected>Choose bank</option>
+        {% for b in banks %}<option value="{{b}}">{{b}}</option>{% endfor %}
+      </select>
+      <label for="account_number">Account number</label>
+      <input id="account_number" name="account_number" type="text" inputmode="numeric" pattern="[0-9 \-]{6,26}" minlength="6" maxlength="26" placeholder="e.g. 1000123456789" required>
+      <label for="account_name">Full name</label>
+      <input id="account_name" name="account_name" type="text" minlength="3" maxlength="80" value="{{me.first_name}} {{me.last_name}}" placeholder="Name on the account" required>
+      <small class="settings-hint">Enter the name exactly as it appears on the account. You can save up to 5 accounts.</small>
+      <button class="btn btn-primary" type="submit">Add payment method</button>
+    </form>
+  </section>
+
+  <section class="settings-card">
+    <h2>Saved accounts</h2>
+    {% if rows %}
+    <ul class="pm-list">
+      {% for r in rows %}
+      <li class="pm-item">
+        <span class="pm-icon">&#127974;</span>
+        <div class="pm-info"><strong>{{r.bank_name}}{% if r.is_default %} <span class="pm-default">Default</span>{% endif %}</strong><span>{{r.account_number}}</span><small>{{r.account_name}}</small></div>
+        <div class="pm-actions">
+          {% if not r.is_default %}<form method="post" action="{{url_for('payment_method_default', pm_id: r.id)}}">{{ csrf_field() }}<button class="btn-soft-action" type="submit">Set as default</button></form>{% endif %}
+          <form method="post" action="{{url_for('payment_method_delete', pm_id: r.id)}}" data-confirm="Remove this payment method?" data-confirm-ok="Yes, remove">{{ csrf_field() }}<button class="btn-danger-soft" type="submit">Remove</button></form>
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="settings-empty">No payment methods saved yet.</p>{% endif %}
+  </section>
+</div>
+{% endblock %}

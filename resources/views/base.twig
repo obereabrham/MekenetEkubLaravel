@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta name="color-scheme" content="light dark">
+
+    <script>
+        /* Apply saved (or system) theme before first paint: no flash. */
+        (function () {
+            try {
+                var saved = localStorage.getItem("mekenet-theme");
+                var dark = saved ? saved === "dark"
+                    : window.matchMedia("(prefers-color-scheme: dark)").matches;
+                document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+                document.documentElement.style.colorScheme = dark ? "dark" : "light";
+                document.documentElement.style.backgroundColor = dark ? "#071411" : "#f4f8f6";
+            } catch (e) {}
+        })();
+    </script>
+
+    <title>
+        {% block title %}
+        Mekenet Ekub
+        {% endblock %}
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{url_for('static', filename: 'css/style.css')}}"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.googleapis.com"
+    >
+
+    <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossorigin
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+</head>
+
+<body>
+
+    <script>
+        (function () {
+            var dark = document.documentElement.getAttribute("data-theme") === "dark";
+            document.body.classList.toggle("dark", dark);
+            document.body.classList.toggle("dark-mode", dark);
+        })();
+    </script>
+
+    <!-- ==================================================
+         BACKGROUND ANIMATION
+    =================================================== -->
+
+    <div class="background-animation">
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+    </div>
+
+
+    <!-- ==================================================
+         NAVIGATION
+    =================================================== -->
+
+    <header class="site-header">
+
+        <a
+            href="{{url_for('home')}}"
+            class="brand"
+        >
+
+            <img class="brand-logo" src="{{url_for('static', filename: 'images/mekenet-ekub-logo.png')}}" alt="Mekenet Ekub logo">
+
+            <div class="brand-text">
+                Mekenet <span>Ekub</span>
+            </div>
+
+        </a>
+
+
+        {% if session.get("user_id") %}
+            {% if session.get("role") == "admin" %}
+            <nav class="member-shortcuts admin-shortcuts" aria-label="Admin navigation">
+                <a href="{{url_for('admin_dashboard')}}"><span class="shortcut-icon">⌂</span>Admin Dashboard</a>
+                <a href="{{url_for('admin_full_ekubs')}}"><span class="shortcut-icon">✓</span>Full Ekubs</a>
+                <a href="{{url_for('admin_pick_winners')}}"><span class="shortcut-icon">🏆</span>Pick Winners</a>
+                <a href="{{url_for('create_ekub')}}"><span class="shortcut-icon">＋</span>Create Ekub</a>
+                <a href="{{url_for('admin_kyc')}}"><span class="shortcut-icon">✓</span>KYC Approval</a>
+                <a href="{{url_for('admin_members')}}"><span class="shortcut-icon">♙</span>Member Info</a>
+                <a href="{{url_for('admin_payment_approval')}}"><span class="shortcut-icon">▣</span>Payment Approval</a>
+                <a href="{{url_for('admin_payment_status')}}"><span class="shortcut-icon">◷</span>Payment Status</a>
+                <a href="{{url_for('recent_winners')}}"><span class="shortcut-icon">🏆</span>Recently Winner</a>
+            </nav>
+            {% elseif session.get("role") == "partner" %}
+            <nav class="partner-shortcuts" aria-label="Partner navigation">
+                <a href="{{url_for('partner_dashboard')}}"><span class="shortcut-icon">⌂</span>Partner Dashboard</a>
+                {% if 'payment_approval' in partner_permissions %}<a href="{{url_for('partner_payment_approval')}}"><span class="shortcut-icon">▣</span>Payment Approval</a>{% endif %}
+                {% if 'kyc_approval' in partner_permissions %}<a href="{{url_for('partner_kyc')}}"><span class="shortcut-icon">✓</span>KYC Approval</a>{% endif %}
+                {% if 'member_info' in partner_permissions %}<a href="{{url_for('partner_members')}}"><span class="shortcut-icon">♙</span>Member Info</a>{% endif %}
+                {% if 'recent_winner' in partner_permissions %}<a href="{{url_for('recent_winners')}}"><span class="shortcut-icon">🏆</span>Recently Winner</a>{% endif %}
+                <a href="{{url_for('admin_payment_status')}}"><span class="shortcut-icon">◷</span>Payment Status</a>
+                <a href="{{url_for('admin_deleted_accounts')}}"><span class="shortcut-icon">🗑</span>Deleted Accounts</a>
+            </nav>
+            {% else %}
+            <nav class="member-shortcuts" aria-label="Member navigation">
+                <a href="{{url_for('dashboard')}}"><span class="shortcut-icon">⌂</span>Dashboard</a>
+                <a href="{{url_for('ekubs')}}"><span class="shortcut-icon">◎</span>Available Ekubs</a>
+                <a href="{{url_for('my_ekubs')}}"><span class="shortcut-icon">▤</span>My Joined Ekubs</a>
+            </nav>
+            {% endif %}
+        {% else %}
+            <nav class="main-nav">
+                <a href="{{url_for('home')}}">Home</a>
+                <a href="{{url_for('ekubs')}}">Ekubs</a>
+                <a href="{{url_for('about')}}">About Us</a>
+                <a href="{{url_for('contact')}}">Contact</a>
+            </nav>
+        {% endif %}
+
+
+        <div class="header-actions">
+
+            <button
+                class="theme-button"
+                type="button"
+                onclick="toggleTheme()"
+                title="Switch light / dark theme"
+                aria-label="Switch light or dark theme"
+            >
+                <span id="themeIcon">☾</span>
+            </button>
+
+
+            {% if session.get("user_id") %}
+                <details class="account-menu">
+                    <summary class="account-avatar" aria-label="Open account menu" title="Account menu">
+                        {% if me and me['profile_picture'] %}
+                            <img src="{{url_for('static', filename: 'uploads/' ~ me['profile_picture'])}}" alt="Profile picture">
+                        {% else %}
+                            <span>{{(me and me['first_name'] ? me['first_name']|slice(0, 1) : 'U')|upper}}</span>
+                        {% endif %}
+                    </summary>
+                    <div class="account-dropdown">
+                        <div class="account-dropdown-heading">
+                            <strong>{{full_name|default('My account')}}</strong>
+                            <small>Manage your account</small>
+                        </div>
+                        <div class="account-dropdown-list">
+                        {% if session.get("role") == "partner" %}
+                            <a href="{{url_for('partner_dashboard')}}">Partner Dashboard</a>
+                            {% if 'payment_approval' in partner_permissions %}<a href="{{url_for('partner_payment_approval')}}">Payment Approval</a>{% endif %}
+                            {% if 'kyc_approval' in partner_permissions %}<a href="{{url_for('partner_kyc')}}">KYC Approval</a>{% endif %}
+                            {% if 'member_info' in partner_permissions %}<a href="{{url_for('partner_members')}}">Member Info</a>{% endif %}
+                            {% if 'recent_winner' in partner_permissions %}<a href="{{url_for('recent_winners')}}">Recently Winner</a>{% endif %}
+                            <a href="{{url_for('about')}}">About Us</a>
+                            <a href="{{url_for('contact')}}">Contact</a>
+                            <a href="{{url_for('settings')}}">Settings</a>
+                        {% elseif session.get("role") == "admin" %}
+                            <a href="{{url_for('admin_dashboard')}}">Admin Dashboard</a>
+                            <a href="{{url_for('admin_full_ekubs')}}">Full Ekubs</a>
+                            <a href="{{url_for('admin_pick_winners')}}">Pick Winners</a>
+                            <a href="{{url_for('admin_payment_approval')}}">Payment Approval</a>
+                            <a href="{{url_for('admin_kyc')}}">KYC Approval</a>
+                            <a href="{{url_for('admin_members')}}">Member Info</a>
+                            <a href="{{url_for('recent_winners')}}">Recently Winner</a>
+                            <a href="{{url_for('admin_applied_ekubs')}}">Applied Ekubs{% if pending_applications %} <span class="dd-badge">{{pending_applications}}</span>{% endif %}</a>
+                            <a href="{{url_for('finished_ekubs')}}">Finished Ekubs</a>
+                            <a href="{{url_for('admin_ads')}}">Publish Ad</a>
+                            <a href="{{url_for('partners')}}">Add Partners</a>
+                            <a href="{{url_for('admin_suspend_members')}}">Suspended Members</a>
+                            <a href="{{url_for('admin_deleted_accounts')}}">Deleted Accounts</a>
+                            <a href="{{url_for('settings')}}">Settings</a>
+                        {% else %}
+                            <a href="{{url_for('home')}}">Home</a>
+                            <a href="{{url_for('ekubs')}}">Ekubs</a>
+                            <a href="{{url_for('about')}}">About Us</a>
+                            <a href="{{url_for('contact')}}">Contact</a>
+                            <a href="{{url_for('profile')}}">My Profile</a>
+                            <a href="{{url_for('apply_ekub')}}">Apply Ekub</a>
+                            <a href="{{url_for('finished_ekubs')}}">Finished Ekubs</a>
+                            <a href="{{url_for('status')}}">My Status</a>
+                            <a href="{{url_for('kyc')}}">KYC Verification</a>
+                            <a href="{{url_for('payment_methods')}}">Payment Methods</a>
+                            <a href="{{url_for('settings')}}">Settings</a>
+                        {% endif %}
+                        </div>
+                        <a class="account-logout" href="{{url_for('logout')}}">Sign Out</a>
+                    </div>
+                </details>
+            {% else %}
+
+                <a
+                    href="{{url_for('login')}}"
+                    class="btn btn-outline"
+                >
+                    Sign In
+                </a>
+
+                <a
+                    href="{{url_for('register')}}"
+                    class="btn btn-primary"
+                >
+                    Get Started
+                </a>
+
+            {% endif %}
+
+        </div>
+
+    </header>
+
+    <!-- ==================================================
+         FLASH MESSAGES
+    =================================================== -->
+
+    {% set messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <script type="application/json" id="mkFlashData">{{messages|tojson}}</script>
+        {% endif %}
+    
+
+
+    <!-- ==================================================
+         PAGE CONTENT
+    =================================================== -->
+
+    <main class="page-content">
+
+        {% block content %}
+        {% endblock %}
+
+    </main>
+
+    <!-- ==================================================
+         FOOTER
+    =================================================== -->
+
+    <footer class="site-footer">
+
+        <div class="footer-inner">
+
+            <div class="footer-brand">
+
+                <div class="brand">
+                    <img class="brand-logo" src="{{url_for('static', filename: 'images/mekenet-ekub-logo.png')}}" alt="Mekenet Ekub logo">
+
+                    <div class="brand-text">
+                        Mekenet <span>Ekub</span>
+                    </div>
+                </div>
+
+                <p>
+                    A modern digital platform for
+                    transparent and organized Ekub management.
+                </p>
+
+            </div>
+
+
+            <div class="footer-column">
+
+                <h4>Community</h4>
+
+                <a href="{{url_for('home')}}">
+                    Home
+                </a>
+
+                <a href="{{url_for('ekubs')}}">
+                    Ekubs
+                </a>
+
+                <a href="{{url_for('about')}}">
+                    About Us
+                </a>
+
+            </div>
+
+
+            <div class="footer-column">
+
+                <h4>Support</h4>
+
+                <a href="{{url_for('contact')}}">
+                    Contact
+                </a>
+
+                {% if not session.get("user_id") %}
+                <a href="{{url_for('login')}}">
+                    Sign In
+                </a>
+
+                <a href="{{url_for('register')}}">
+                    Register
+                </a>
+
+                <a href="{{url_for('login')}}">
+                    Sign In / Portal Login
+                </a>
+                {% endif %}
+
+            </div>
+
+
+            <div class="footer-column footer-social-column">
+                <h4>Follow Us</h4>
+                {% include '_social_links.twig' %}
+            </div>
+
+
+            <div class="footer-column">
+
+                <h4>Rules</h4>
+
+                <a href="{{url_for('terms')}}">
+                    Terms & Agreement
+                </a>
+
+                <a href="{{url_for('privacy')}}">
+                    Privacy Policy
+                </a>
+
+                <a href="{{url_for('about')}}">
+                    2% Service Fee
+                </a>
+
+                <a href="{{url_for('about')}}">
+                    Late Payment Rules
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <div class="footer-bottom">
+
+            <span>
+                © 2026 Mekenet Ekub
+            </span>
+
+            <span>
+                Secure Digital Ekub Management
+            </span>
+
+        </div>
+
+    </footer>
+
+
+    <script
+        src="{{url_for('static', filename: 'js/main.js')}}"
+    ></script>
+
+    {% block scripts %}{% endblock %}
+
+    <script>
+    /* Close the profile dropdown when touching/clicking outside it, or pressing Esc */
+    (function(){
+        function closeMenus(except){
+            document.querySelectorAll('details.account-menu[open]').forEach(function(d){
+                if(d!==except) d.removeAttribute('open');
+            });
+        }
+        document.addEventListener('click',function(e){
+            var m=e.target.closest('details.account-menu');
+            closeMenus(m||null);
+        });
+        document.addEventListener('touchstart',function(e){
+            var m=e.target.closest('details.account-menu');
+            closeMenus(m||null);
+        },{passive:true});
+        document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenus(null); });
+        window.addEventListener('scroll',function(){},{passive:true});
+    })();
+    </script>
+</body>
+</html>

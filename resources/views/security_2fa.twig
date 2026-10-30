@@ -1,0 +1,50 @@
+{% extends 'base.twig' %}
+{% block title %}Account security | Mekenet Ekub{% endblock %}
+{% block content %}
+<section class="auth-page">
+  <div class="auth-card">
+    <h1>Account security</h1>
+    <p>Choose how you want to receive your second sign-in code: an authenticator app or email.</p>
+    {% if enabled %}
+      <div class="success-banner"><span class="success-check">✓</span><div><strong>{% if method == 'email' %}Email OTP is enabled{% else %}Authenticator app is enabled{% endif %}</strong><small>{% if method == 'email' %}Sign-in codes are sent to {{email}}.{% else %}Your password is followed by a code from your authenticator app.{% endif %}</small></div></div>
+      <form method="post" class="auth-form" data-confirm="Disable two-factor sign-in? You will sign in with your password only." data-confirm-ok="Yes, disable">{{ csrf_field() }}
+        <input type="hidden" name="action" value="disable">
+        <button class="btn btn-secondary" type="submit">Disable two-factor sign-in</button>
+      </form>
+    {% endif %}
+    <div class="auth-form">
+      <h2>Authenticator app</h2>
+      <p>Use Google Authenticator, Microsoft Authenticator, or another TOTP app.</p>
+      <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="authenticator"><button class="btn btn-primary" type="submit">Set up authenticator app</button></form>
+    </div>
+    <div class="auth-form">
+      <h2>Email one-time code</h2>
+      <p>{% if email %}Send a verification code to {{email}} and enter it below to enable email sign-in.{% else %}Add a valid email address to your profile before enabling email OTP.{% endif %}</p>
+      <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="email"><button class="btn btn-primary" type="submit">Set up email OTP</button></form>
+    </div>
+    {% if email_pending %}
+      <hr>
+      <h2>Verify your email</h2>
+      <p>Enter the six-digit code sent to {{email}}. It expires in 10 minutes.</p>
+      <form method="post" action="{{url_for('confirm_2fa')}}" class="auth-form">{{ csrf_field() }}
+        <label for="code">Email verification code</label>
+        <input id="code" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" required>
+        <button class="btn btn-primary" type="submit">Confirm and enable email OTP</button>
+      </form>
+      <form method="post" class="auth-form">{{ csrf_field() }}<input type="hidden" name="action" value="resend_email"><button class="btn btn-secondary" type="submit">Resend email code</button></form>
+    {% endif %}
+    {% if secret %}
+      <hr>
+      <h2>Set up your authenticator app</h2>
+      <p>In Google Authenticator, Microsoft Authenticator, or another TOTP app, add an account using this secret:</p>
+      <p><strong>{{secret}}</strong></p>
+      <p>Account URI: <code style="overflow-wrap:anywhere">{{uri}}</code></p>
+      <form method="post" action="{{url_for('confirm_2fa')}}" class="auth-form">{{ csrf_field() }}
+        <label for="code">Enter the app's current 6-digit code</label>
+        <input id="code" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" autocomplete="one-time-code" required>
+        <button class="btn btn-primary" type="submit">Confirm and enable authenticator</button>
+      </form>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

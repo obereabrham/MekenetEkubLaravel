@@ -1,0 +1,30 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="container admin-kyc-page">
+  <div class="admin-tool-head kyc-head"><div><span class="admin-eyebrow">ADMIN PORTAL</span><h1>KYC Approval</h1><p>Review identity submissions and approve or reject pending verification requests.</p></div><div class="kyc-count"><strong>{{ pending_count }}</strong><span>Pending Reviews</span></div></div>
+  <div class="kyc-list">
+  {% for k in rows|rejectattr('status', 'equalto', 'approved') %}
+    <article class="kyc-review-card">
+      <div class="kyc-review-top"><div class="kyc-person-avatar">{{(k.first_name|default('U'))|slice(0, 1)|upper}}</div><div class="kyc-person"><h2>{{k.first_name|default('')}} {{k.last_name|default('')}}</h2><span>@{{k.username}} · {{k.phone}}</span></div><span class="kyc-pending">Pending</span></div>
+      <div class="kyc-review-body">
+        <div class="kyc-detail-grid"><div><small>FULL NAME</small><strong>{{k.full_name|default('—')}}</strong></div><div><small>DATE OF BIRTH</small><strong>{{k.dob|default('—')}}</strong></div><div><small>GENDER</small><strong>{{k.gender|default('—')}}</strong></div><div><small>ID TYPE</small><strong>{{k.id_type|default('—')}}</strong></div><div><small>ID NUMBER</small><strong>{{k.id_number|default('—')}}</strong></div></div>
+        <div class="kyc-documents"><div class="kyc-doc-title">Documents</div><div class="kyc-doc-buttons">{% if k.personal_photo %}<a class="kyc-doc-btn" target="_blank" href="{{url_for('uploads', name: k.personal_photo)}}">Personal Photo <span>↗</span></a>{% endif %}<a class="kyc-doc-btn" target="_blank" href="{{url_for('uploads', name: k.id_front)}}">ID Front <span>↗</span></a>{% if k.id_back %}<a class="kyc-doc-btn" target="_blank" href="{{url_for('uploads', name: k.id_back)}}">ID Back <span>↗</span></a>{% endif %}{% if k.liveness_verified %}<span class="kyc-doc-btn">On-device live challenge completed · review ID and agreement video</span>{% elseif k.liveness_video %}<a class="kyc-doc-btn" target="_blank" href="{{url_for('uploads', name: k.liveness_video)}}">Legacy Live Check Video <span>↗</span></a>{% endif %}<a class="kyc-doc-btn" target="_blank" href="{{url_for('uploads', name: k.video_agreement)}}">Agreement Video <span>↗</span></a></div></div>
+      </div>
+      {% if k.status == 'pending' %}
+      <div class="kyc-review-actions"><form method="post" action="{{url_for('kyc_action', kyc_id: k.id, action: 'approve')}}">{{ csrf_field() }}<button class="kyc-approve" type="submit">✓ Approve KYC</button></form><form class="kyc-reject-form" method="post" action="{{url_for('kyc_action', kyc_id: k.id, action: 'reject')}}">{{ csrf_field() }}<input name="reason" required placeholder="Reason for rejection"><button class="kyc-reject" type="submit">Reject</button></form></div>
+      {% else %}
+      <div class="kyc-review-result">
+        <span class="kyc-result-status {{k.status|lower}}">{{k.status|capitalize}}</span>
+        {% if k.approved_by %}<span class="kyc-approved-by">{{ k.status == 'approved' ? 'Approved' : 'Reviewed' }} by <b>@{{k.approved_by}}</b></span>{% endif %}
+        {% if k.reviewed_at %}<span class="kyc-reviewed-at">{{k.reviewed_at}}</span>{% endif %}
+      </div>
+      {% endif %}
+    </article>
+  {% else %}<div class="kyc-empty"><div>✓</div><h2>All caught up</h2><p>There are no pending KYC verification requests right now.</p></div>{% endfor %}
+  </div>
+</div>
+<style>
+.kyc-review-result{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:14px;margin-top:14px;border-top:1px solid var(--border)}
+.kyc-result-status{padding:6px 10px;border-radius:999px;font-size:10px;font-weight:900;text-transform:capitalize}.kyc-result-status.approved{background:var(--green-light);color:var(--green-dark)}.kyc-result-status.rejected{background:#ffe7e7;color:#b42318}.kyc-approved-by{font-size:11px;color:var(--text)}.kyc-approved-by b{color:var(--green-dark)}.kyc-reviewed-at{font-size:10px;color:var(--muted)}
+</style>
+{% endblock %}

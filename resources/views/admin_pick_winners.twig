@@ -1,0 +1,50 @@
+{% extends 'base.twig' %}
+{% block title %}Pick Winners | Mekenet Ekub{% endblock %}
+{% block content %}
+<main class="container pick-winners-page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">ADMIN MANAGEMENT</div>
+      <h1>Pick Winners</h1>
+      <p>Only Ekubs with every member fully paid for the current period appear here. After a draw, the Ekub leaves this list until the next period is ready.</p>
+    </div>
+    <a class="btn ghost" href="{{url_for('admin_dashboard')}}">← Admin Dashboard</a>
+  </div>
+
+  {% if ekubs %}
+    {% for category, category_ekubs in ekubs|groupby('category') %}
+      <section class="winner-category">
+        <h2>{{category}} <span>{{category_ekubs|length}}</span></h2>
+        <div class="winner-grid">
+          {% for e in category_ekubs %}
+            <article class="winner-card">
+              <div class="winner-card-head">
+                <span class="ready-label"><span></span>Ready to draw</span>
+                <span class="period-tag">Period {{e.current_period}} / {{e.duration}}</span>
+              </div>
+              <h3>{{e.name}}</h3>
+              <p class="winner-meta">{{e.frequency}} contributions · {{e.base_amount}} ETB per member</p>
+              <div class="paid-row"><span>Current period payments</span><strong>{{e.ready_members}} / {{e.joined_count}} paid</strong></div>
+              <div class="paid-track"><span></span></div>
+              <div class="winner-links">
+                <a class="btn ghost" href="{{url_for('admin_payments', ekub_id: e.id, period_no: e.current_period)}}">Review payments</a>
+                <a class="btn draw-button" href="{{url_for('pick_winner', ekub_id: e.id, period_no: e.current_period)}}">Pick Winner <span aria-hidden="true">→</span></a>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+  {% else %}
+    <section class="winner-empty">
+      <div class="empty-trophy">🏆</div>
+      <h2>No Ekubs are ready for a draw</h2>
+      <p>An Ekub appears here when every member’s payment for its current period is fully approved. Completed draws are removed automatically.</p>
+      <a class="btn ghost" href="{{url_for('admin_full_ekubs')}}">View full Ekubs</a>
+    </section>
+  {% endif %}
+</main>
+<style>
+.pick-winners-page{padding-top:22px;padding-bottom:42px}.page-head{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:25px}.page-head h1{margin:.15rem 0}.page-head p{max-width:720px;margin:7px 0 0;color:var(--muted,#738078);line-height:1.55}.eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.12em;opacity:.65}.winner-category{margin:25px 0}.winner-category h2{display:flex;align-items:center;gap:10px;font-size:1.12rem}.winner-category h2 span{padding:3px 9px;border-radius:999px;background:rgba(34,177,112,.13);color:#168653;font-size:.78rem}.winner-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.winner-card{min-width:0;padding:18px;border:1px solid rgba(34,177,112,.22);border-radius:21px;background:linear-gradient(145deg,var(--surface,#fff),color-mix(in srgb,var(--surface,#fff) 92%,#43b5d4));box-shadow:0 9px 26px rgba(16,35,28,.07)}.winner-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.ready-label,.period-tag{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:800}.ready-label{background:rgba(34,177,112,.13);color:#168653}.ready-label span{width:7px;height:7px;border-radius:50%;background:#20a96c}.period-tag{background:rgba(67,181,212,.13);color:#167f9c}.winner-card h3{margin:16px 0 4px;font-size:1.14rem;overflow-wrap:anywhere}.winner-meta{margin:0;color:var(--muted,#738078);font-size:.88rem}.paid-row{display:flex;justify-content:space-between;gap:8px;margin:20px 0 8px;font-size:.82rem}.paid-row span{color:var(--muted,#738078)}.paid-track{height:8px;border-radius:99px;background:rgba(127,127,127,.16);overflow:hidden}.paid-track span{display:block;width:100%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#20a96c,#43b5d4)}.winner-links{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:17px}.winner-links .btn{text-align:center;min-width:0}.draw-button{background:linear-gradient(110deg,#20a96c,#43b5d4);color:#fff;border:0}.draw-button span{margin-left:5px}.winner-empty{text-align:center;padding:48px 20px;border:1px solid rgba(34,177,112,.2);border-radius:24px;background:linear-gradient(145deg,var(--surface,#fff),color-mix(in srgb,var(--surface,#fff) 94%,#43b5d4))}.empty-trophy{display:grid;place-items:center;width:62px;height:62px;margin:0 auto 14px;border-radius:20px;background:rgba(34,177,112,.13);font-size:1.8rem}.winner-empty h2{margin:0 0 8px}.winner-empty p{max-width:560px;margin:0 auto 18px;color:var(--muted,#738078);line-height:1.55}@media(max-width:900px){.winner-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.page-head{align-items:flex-start;flex-direction:column}.winner-grid{grid-template-columns:1fr}.winner-links{grid-template-columns:1fr}}
+</style>
+{% endblock %}

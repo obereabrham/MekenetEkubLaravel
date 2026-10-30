@@ -1,0 +1,214 @@
+{% extends 'base.twig' %}
+
+{% block title %}{{ekub.name}} · Mekenet Ekub{% endblock %}
+
+{% block content %}
+<section class="ekub-detail-page">
+    <div class="container ekub-detail-shell">
+
+        <div class="ekub-detail-topbar">
+            <a href="{{url_for('ekubs')}}" class="ekub-back-link">
+                <span aria-hidden="true">←</span>
+                <span>Back to Available Ekubs</span>
+            </a>
+            <span class="ekub-status-badge"><span></span> Ekub Details</span>
+        </div>
+
+        <article class="ekub-detail-hero">
+            <div class="ekub-detail-heading">
+                <div class="ekub-category-pill">{{ekub.category}}</div>
+                <h1>{{ekub.name}}</h1>
+                <p class="ekub-detail-subtitle">
+                    Review the contribution plan, schedule, service fee and current members before joining this Ekub.
+                </p>
+            </div>
+
+            <div class="ekub-detail-summary">
+                <div class="ekub-summary-item">
+                    <span class="summary-icon">↻</span>
+                    <div><small>Frequency</small><strong>{{ekub.frequency}}</strong></div>
+                </div>
+                <div class="ekub-summary-item">
+                    <span class="summary-icon">ETB</span>
+                    <div><small>Contribution</small><strong>{{ekub.base_amount}} ETB</strong></div>
+                </div>
+                <div class="ekub-summary-item">
+                    <span class="summary-icon">◷</span>
+                    <div><small>Duration</small><strong>{{ekub.duration}} periods</strong></div>
+                </div>
+            </div>
+        </article>
+
+        <div class="ekub-detail-grid">
+            <section class="ekub-info-card">
+                <div class="section-heading">
+                    <div>
+                        <span class="section-kicker">Plan information</span>
+                        <h2>How this Ekub works</h2>
+                    </div>
+                    <span class="section-mark">01</span>
+                </div>
+
+                <div class="ekub-info-list">
+                    <div class="ekub-info-row">
+                        <span>Payment frequency</span>
+                        <strong>{{ekub.frequency}}</strong>
+                    </div>
+                    <div class="ekub-info-row">
+                        <span>Base contribution</span>
+                        <strong>{{ekub.base_amount}} ETB</strong>
+                    </div>
+                    <div class="ekub-info-row">
+                        <span>Duration</span>
+                        <strong>{{ekub.duration}} periods</strong>
+                    </div>
+                    <div class="ekub-info-row">
+                        <span>Service fee</span>
+                        <strong>2%</strong>
+                    </div>
+                </div>
+
+                <div class="ekub-fee-note">
+                    <span class="fee-icon">%</span>
+                    <div>
+                        <strong>Service fee & payout</strong>
+                        <p>Winner net payout is calculated at 98% of the approved gross pool.</p>
+                    </div>
+                </div>
+            </section>
+
+            <aside class="ekub-action-card">
+                <span class="section-kicker">Participation</span>
+                {% if ekub.status == 'open' %}<h2>Join this Ekub</h2>
+                <p>Become a member and follow the contribution schedule for this Ekub.</p>{% elseif ekub.status == 'finished' %}<h2>Ekub finished</h2>
+                <p>Every period of this Ekub has a winner. A fresh Ekub with the same settings is available on the Available Ekubs page.</p>{% else %}<h2>Ekub in progress</h2>
+                <p>This Ekub has started and is no longer accepting new members.</p>{% endif %}
+
+                <div class="action-metric">
+                    <span>Current members</span>
+                    <strong>{{members|length}}</strong>
+                </div>
+
+                {% if me and me.role == 'member' and ekub.status == 'open' and not is_full and not already_joined %}
+                    <a class="btn btn-primary btn-large ekub-join-button" href="{{url_for('join_ekub', ekub_id: ekub.id)}}">
+                        Join Ekub <span aria-hidden="true">→</span>
+                    </a>
+                {% endif %}
+
+                {% if already_joined %}<small class="action-note"><strong>✓ You have joined this Ekub.</strong></small>{% elseif ekub.status == 'open' and is_full %}<small class="action-note"><strong>This Ekub is full.</strong> No more members can be added.</small>{% elseif ekub.status == 'open' %}<small class="action-note">Please review the contribution amount and schedule before joining.</small>{% endif %}
+            </aside>
+        </div>
+
+{% set imgs = item_images|default([]) %}
+        {% if imgs %}
+        <section class="ekub-members-card item-gallery">
+            <div class="section-heading"><div><span class="section-kicker">Item Ekub</span><h2>Item images</h2></div></div>
+            <div class="item-gallery-grid">
+            {% for v in imgs %}<img class="item-thumb" src="{{url_for('static', filename: 'uploads/' ~ v)}}" alt="Item image {{loop.index}}" tabindex="0">{% endfor %}
+            </div>
+        </section>
+        <div class="img-lightbox" id="imgLightbox"><button type="button" class="img-lightbox-close" aria-label="Close">×</button><img alt="Item image"></div>
+        <style>
+        .item-gallery-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-top:14px}
+        .item-thumb{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:14px;cursor:zoom-in;border:1px solid var(--border);transition:transform .2s}.item-thumb:hover{transform:scale(1.03)}
+        .img-lightbox{position:fixed;inset:0;background:rgba(0,0,0,.82);display:none;align-items:center;justify-content:center;z-index:9999;padding:20px}
+        .img-lightbox.open{display:flex}.img-lightbox img{max-width:94vw;max-height:90vh;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+        .img-lightbox-close{position:absolute;top:16px;right:22px;font-size:38px;line-height:1;color:#fff;background:none;border:0;cursor:pointer}
+        </style>
+        <script>
+        (function(){var lb=document.getElementById('imgLightbox'),im=lb.querySelector('img');
+          function close(){lb.classList.remove('open')}
+          document.querySelectorAll('.item-thumb').forEach(function(t){function o(){im.src=t.src;lb.classList.add('open')}t.addEventListener('click',o);t.addEventListener('keydown',function(e){if(e.key==='Enter')o()})});
+          lb.addEventListener('click',function(e){if(e.target!==im)close()});document.addEventListener('keydown',function(e){if(e.key==='Escape')close()});})();
+        </script>
+        {% endif %}
+
+        <section class="ekub-members-card">
+            <div class="section-heading members-heading">
+                <div>
+                    <span class="section-kicker">Community</span>
+                    <h2>Current members</h2>
+                    <p>Members currently associated with this Ekub.</p>
+                </div>
+                <div class="member-count-badge">{{members|length}} member{% if members|length != 1 %}s{% endif %}</div>
+            </div>
+
+            {% if members %}
+                <div class="ekub-members-table-wrap">
+                    <table class="ekub-members-table">
+                        <thead>
+                            <tr>
+                                <th>Member</th>
+                                <th>Username</th>
+                                <th>Share</th>
+                                <th>Contribution</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in members %}
+                            <tr>
+                                <td>
+                                    <div class="member-cell">
+                                        <span class="member-avatar">{{(m.first_name ? m.first_name|slice(0, 1) : 'U')|upper}}</span>
+                                        <div>
+                                            <strong>{{m.first_name}} {{m.last_name}}</strong>
+                                            <small>Ekub member</small>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><span class="member-username">@{{m.username}}</span></td>
+                                <td><span class="share-chip">{{m.share_type}}</span></td>
+                                <td><strong>{{m.contribution_amount}} ETB</strong></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-members">
+                    <div class="empty-members-icon">◎</div>
+                    <h3>No members yet</h3>
+                    <p>Be one of the first members to join this Ekub.</p>
+                </div>
+            {% endif %}
+        </section>
+
+        {% if can_see_winners %}
+        <section class="ekub-members-card">
+            <div class="section-heading members-heading">
+                <div>
+                    <span class="section-kicker">Draw results</span>
+                    <h2>Winners by period</h2>
+                    <p>The winner of every period is announced here and by email.</p>
+                </div>
+                <div class="member-count-badge">{{winners|length}} of {{ekub.duration}} drawn</div>
+            </div>
+            {% if winners %}
+                <div class="ekub-members-table-wrap">
+                    <table class="ekub-members-table">
+                        <thead><tr><th>Period</th><th>Winner</th><th>Date</th></tr></thead>
+                        <tbody>
+                            {% for w in winners %}
+                            <tr>
+                                <td><span class="share-chip">Period {{w.period_no}}</span></td>
+                                <td>
+                                    <div class="member-cell">
+                                        <span class="member-avatar">&#127942;</span>
+                                        <div><strong>{{w.first_name}} {{w.last_name}}</strong>{% if me and w.user_id == me.id %} <span class="share-chip">You</span>{% endif %}<small>@{{w.username}}</small></div>
+                                    </div>
+                                </td>
+                                <td>{{w.created_at}}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-members"><div class="empty-members-icon">&#127942;</div><h3>No winners yet</h3><p>The first winner will appear here after the draw.</p></div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+    </div>
+</section>
+{% endblock %}

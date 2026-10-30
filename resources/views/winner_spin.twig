@@ -1,0 +1,191 @@
+{% extends 'base.twig' %}
+{% block title %}Pick Winner · {{ekub.name}}{% endblock %}
+{% block content %}
+<div class="spin-page">
+  <a class="settings-back" href="{{url_for('admin_dashboard')}}">&larr; Admin Dashboard</a>
+  <h1>Pick Winner</h1>
+  <p class="settings-sub">{{ekub.name}} &middot; Period {{period_no}} of {{ekub.duration}}</p>
+
+  <div class="spin-stats">
+    <div><small>Members on the wheel</small><strong>{{members|length}}</strong></div>
+    <div><small>Payments approved</small><strong>{{approved}} / {{members|length}}</strong></div>
+    <div><small>Winners drawn</small><strong>{{winners|length}} / {{ekub.duration}}</strong></div>
+  </div>
+
+  {% if error %}
+  <div class="spin-notice {{ drawn ? 'ok' : 'warn' }}">
+    <strong>{{error}}</strong>
+    <div class="spin-notice-actions">
+      {% if not drawn %}<a class="btn-soft-action" href="{{url_for('admin_payments', ekub_id: ekub.id, period_no: period_no)}}">Open payments</a>{% endif %}
+      {% if drawn and ekub.current_period != period_no %}<a class="btn btn-primary" href="{{url_for('pick_winner', ekub_id: ekub.id, period_no: ekub.current_period)}}">Go to Period {{ekub.current_period}} draw</a>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <section class="spin-stage" id="stage">
+    <div class="wheel-wrap">
+      <div class="wheel-pointer" id="pointer" aria-hidden="true"></div>
+      <canvas id="wheel" width="900" height="900" aria-label="Winner wheel"></canvas>
+      <button type="button" class="wheel-hub" id="hub" aria-label="Spin the wheel">SPIN</button>
+    </div>
+    <div class="spin-controls">
+      <button type="button" class="btn btn-primary btn-large" id="spinBtn">&#127922; Spin the wheel</button>
+      <p class="spin-hint" id="spinHint">Press spin. The winner is chosen securely by the server, then the wheel lands on them.</p>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="settings-card" style="margin-top:22px">
+    <h2>Winners so far</h2>
+    {% if winners %}
+    <ul class="pm-list">
+      {% for w in winners %}
+      <li class="pm-item"><span class="pm-icon">&#127942;</span><div class="pm-info"><strong>Period {{w.period_no}}</strong><span>{{w.first_name}} {{w.last_name}}</span><small>@{{w.username}} &middot; {{w.created_at}}</small></div></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="settings-empty">No winner has been picked yet.</p>{% endif %}
+  </section>
+</div>
+
+<div class="spin-result" id="result" hidden>
+  <div class="spin-result-box" role="dialog" aria-modal="true" aria-labelledby="resTitle">
+    <div class="spin-trophy">&#127942;</div>
+    <small id="resPeriod"></small>
+    <h2 id="resTitle">Winner</h2>
+    <div class="spin-winner-name" id="resName"></div>
+    <p class="spin-result-line" id="resMoney"></p>
+    <p class="spin-result-note">Emails are being sent to all members and the admin.</p>
+    <div class="spin-result-actions">
+      <button type="button" class="btn btn-primary" id="resDone">Done</button>
+      <a class="btn-soft-action" href="{{url_for('admin_dashboard')}}">Admin dashboard</a>
+    </div>
+  </div>
+</div>
+
+<style>
+.spin-page{width:min(920px,92%);margin:34px auto 70px;color:var(--text)}
+.spin-page h1{margin:6px 0 4px;color:var(--text);font-size:clamp(1.7rem,4vw,2.3rem);letter-spacing:-.03em}
+.spin-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 20px}
+.spin-stats div{padding:14px 16px;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+.spin-stats small{display:block;color:var(--muted);font-size:.74rem;margin-bottom:4px}.spin-stats strong{font-size:1.15rem;color:var(--text)}
+.spin-notice{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:18px 20px;border-radius:16px;border:1px solid var(--border)}
+.spin-notice.warn{background:var(--warn-bg,#fef3c7);color:var(--warn-fg,#8a4b00)}.spin-notice.ok{background:var(--ok-bg,#dcfce7);color:var(--ok-fg,#166534)}
+.spin-notice-actions{display:flex;gap:8px;flex-wrap:wrap}
+.spin-stage{display:flex;flex-direction:column;align-items:center;gap:22px;padding:30px 18px;border:1px solid var(--border);border-radius:24px;background:var(--surface);box-shadow:var(--shadow)}
+.wheel-wrap{position:relative;width:min(440px,84vw);aspect-ratio:1}
+.wheel-wrap canvas{width:100%;height:100%;display:block;border-radius:50%;box-shadow:0 0 0 8px var(--surface-2),0 0 0 11px var(--border),0 18px 45px rgba(0,0,0,.28);will-change:transform}
+.wheel-pointer{position:absolute;left:50%;top:-14px;width:0;height:0;transform:translateX(-50%);z-index:3;border-left:16px solid transparent;border-right:16px solid transparent;border-top:34px solid #dc2626;filter:drop-shadow(0 3px 3px rgba(0,0,0,.35));transform-origin:50% 0}
+.wheel-hub{position:absolute;left:50%;top:50%;width:21%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;border:5px solid var(--surface);background:linear-gradient(135deg,var(--green),var(--blue));color:#fff;font-weight:900;letter-spacing:.06em;font-size:clamp(.7rem,2.2vw,.95rem);cursor:pointer;z-index:2;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.wheel-hub:disabled,#spinBtn:disabled{opacity:.6;cursor:not-allowed}
+.spin-controls{text-align:center}.spin-hint{margin:10px 0 0;color:var(--muted);font-size:.85rem;max-width:420px}.spin-hint.error{color:var(--danger-fg,#b42318);font-weight:700}
+.spin-result{position:fixed;inset:0;z-index:3000;display:flex;align-items:center;justify-content:center;padding:18px;background:var(--overlay,rgba(0,0,0,.6))}
+.spin-result[hidden]{display:none}
+.spin-result-box{position:relative;z-index:2;width:min(440px,100%);padding:30px 26px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);text-align:center;box-shadow:0 25px 70px rgba(0,0,0,.45);animation:pop .45s cubic-bezier(.2,1.4,.4,1)}
+.spin-trophy{font-size:3.4rem;line-height:1}.spin-result-box small{display:block;margin-top:8px;color:var(--muted);font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.spin-result-box h2{margin:4px 0 8px;color:var(--text)}
+.spin-winner-name{font-size:clamp(1.6rem,6vw,2.2rem);font-weight:900;letter-spacing:-.02em;background:linear-gradient(135deg,var(--green),var(--blue));-webkit-background-clip:text;background-clip:text;color:transparent;overflow-wrap:anywhere}
+.spin-result-line{margin:10px 0 4px;color:var(--text);font-weight:700}.spin-result-note{margin:0 0 18px;color:var(--muted);font-size:.85rem}
+.spin-result-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.confetti{position:fixed;top:-14px;width:9px;height:14px;z-index:1;opacity:.95;animation:fall linear forwards;pointer-events:none}
+@keyframes fall{to{transform:translateY(110vh) rotate(720deg);opacity:.9}}
+@keyframes pop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}
+@media(max-width:560px){.spin-stats{grid-template-columns:1fr}}
+</style>
+
+{% if not error %}
+<script>
+(function(){
+  var NAMES=[{% for m in members %}{{(m.first_name ~ ' ' ~ m.last_name)|tojson}}{{ not loop.last ? ',' : '' }}{% endfor %}];
+  var DRAW_URL={{url_for('pick_winner', ekub_id: ekub.id, period_no: period_no)|tojson}};
+  var N=NAMES.length, canvas=document.getElementById('wheel'), ctx=canvas.getContext('2d'), S=canvas.width, C=S/2, R=C-6;
+  var PALETTE=['#1f8a38','#0088cc','#0e9f6e','#2563eb','#15803d','#0e7490','#28a745','#1d4ed8'];
+  var seg=2*Math.PI/N, segDeg=360/N, rotation=0, spinning=false;
+  var spinBtn=document.getElementById('spinBtn'), hub=document.getElementById('hub'), hint=document.getElementById('spinHint'), pointer=document.getElementById('pointer');
+
+  function color(i){var c=PALETTE[i%PALETTE.length]; if(N>1&&i===N-1&&c===PALETTE[0]) c='#7c3aed'; return c}
+  function trim(s,n){return s.length>n?s.slice(0,n-1)+'\u2026':s}
+  function draw(){
+    ctx.clearRect(0,0,S,S);
+    for(var i=0;i<N;i++){
+      var a0=-Math.PI/2+i*seg,a1=a0+seg;
+      ctx.beginPath();ctx.moveTo(C,C);ctx.arc(C,C,R,a0,a1);ctx.closePath();
+      ctx.fillStyle=color(i);ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=3;ctx.stroke();
+      if(N<=60){
+        ctx.save();ctx.translate(C,C);ctx.rotate(a0+seg/2);
+        ctx.textAlign='right';ctx.textBaseline='middle';ctx.fillStyle='#fff';
+        var fs=N<=8?42:N<=14?34:N<=24?26:N<=40?19:14;
+        var label=trim(NAMES[i],26), avail=R*0.74;
+        ctx.font='800 '+fs+'px Inter,Arial,sans-serif';
+        while(fs>11 && ctx.measureText(label).width>avail){fs-=2;ctx.font='800 '+fs+'px Inter,Arial,sans-serif'}
+        ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=4;
+        ctx.fillText(label,R-30,0);
+        ctx.restore();
+      }
+    }
+    ctx.beginPath();ctx.arc(C,C,R,0,2*Math.PI);ctx.lineWidth=8;ctx.strokeStyle='rgba(255,255,255,.9)';ctx.stroke();
+  }
+  draw();
+
+  function flick(){ if(pointer.animate) pointer.animate([{transform:'translateX(-50%) rotate(0deg)'},{transform:'translateX(-50%) rotate(-22deg)'},{transform:'translateX(-50%) rotate(0deg)'}],{duration:110}); }
+  function under(rot){ var a=(((-rot)%360)+360)%360; return Math.floor(a/segDeg)%N; }
+
+  function animateTo(index,done){
+    var jitter=(Math.random()*0.7-0.35)*segDeg, center=(index+0.5)*segDeg;
+    var delta=((((-(center+jitter))-rotation)%360)+360)%360;
+    var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var total=360*(reduce?2:7)+delta, start=rotation, dur=reduce?1400:7000, t0=null, last=under(rotation);
+    function step(ts){
+      if(t0===null)t0=ts; var t=Math.min((ts-t0)/dur,1), e=1-Math.pow(1-t,4);
+      rotation=start+total*e; canvas.style.transform='rotate('+rotation+'deg)';
+      var u=under(rotation); if(u!==last){last=u;flick()}
+      if(t<1) requestAnimationFrame(step); else {rotation=start+total; done()}
+    }
+    requestAnimationFrame(step);
+  }
+
+  function confetti(){
+    var cols=['#1f8a38','#0088cc','#f59e0b','#ef4444','#8b5cf6','#22c55e'];
+    for(var i=0;i<90;i++){
+      var d=document.createElement('div');d.className='confetti';
+      d.style.left=Math.random()*100+'vw';d.style.background=cols[i%cols.length];
+      d.style.animationDuration=(2.6+Math.random()*2.4)+'s';d.style.animationDelay=(Math.random()*0.8)+'s';
+      d.style.transform='rotate('+Math.random()*360+'deg)';
+      document.body.appendChild(d);setTimeout(function(x){x.remove()},6500,d);
+    }
+  }
+
+  var finishedEkub=false;
+  function fmt(n){return Number(n).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+  function showResult(r){
+    document.getElementById('resPeriod').textContent='Period '+r.period+' winner';
+    document.getElementById('resName').textContent=r.winner;
+    document.getElementById('resMoney').textContent='Net payout: '+fmt(r.net)+' ETB (after '+fmt(r.fee)+' ETB service fee)';
+    document.getElementById('result').hidden=false;confetti();
+    if(r.finished){
+      finishedEkub=true;
+      document.getElementById('resMoney').textContent+=' \u2014 This Ekub is now finished and a new one was created on Available Ekubs.';
+      document.getElementById('resDone').textContent='View Finished Ekubs';
+    }
+  }
+
+  function spin(){
+    if(spinning)return; spinning=true; spinBtn.disabled=true; hub.disabled=true;
+    hint.className='spin-hint'; hint.textContent='Drawing\u2026';
+    fetch(DRAW_URL,{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':'{{csrf_token()}}'},body:'{}',credentials:'same-origin'})
+      .then(function(res){return res.json().then(function(j){return {ok:res.ok&&j.ok,j:j}})})
+      .then(function(r){
+        if(!r.ok){throw new Error(r.j.error||'The draw could not be completed.')}
+        hint.textContent='Good luck!';
+        animateTo(r.j.index,function(){hint.textContent='Winner: '+r.j.winner;showResult(r.j)});
+      })
+      .catch(function(err){
+        spinning=false; spinBtn.disabled=false; hub.disabled=false;
+        hint.className='spin-hint error'; hint.textContent=err.message||'Network error. Please try again.';
+      });
+  }
+  spinBtn.addEventListener('click',spin); hub.addEventListener('click',spin);
+  document.getElementById('resDone').addEventListener('click',function(){if(finishedEkub){location.href='{{url_for("finished_ekubs")}}'}else{location.reload()}});
+})();
+</script>
+{% endif %}
+{% endblock %}

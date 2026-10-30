@@ -1,0 +1,46 @@
+{% extends 'base.twig' %}
+{% block title %}Partner Dashboard | Mekenet Ekub{% endblock %}
+{% block content %}
+<div class="container partner-dashboard-page">
+  <section class="partner-dashboard-hero">
+    <div>
+      <span class="partner-eyebrow">PARTNER PORTAL</span>
+      <h1>Partner Dashboard</h1>
+      <p>Your workspace contains the tools assigned to your partner account, plus Payment Status and Deleted Accounts.</p>
+    </div>
+    <div class="partner-hero-badge">{{permissions|length + 2}} Tools</div>
+  </section>
+
+  <section class="partner-permission-grid">
+    {% if 'payment_approval' in permissions %}
+    <a class="partner-tool-card payment" href="{{url_for('partner_payment_approval')}}">
+      <span class="partner-tool-icon">▣</span><div><small>AUTHORIZED TOOL</small><h2>Payment Approval</h2><p>Review and approve member payments for started Ekubs.</p></div><span class="partner-tool-arrow">→</span>
+    </a>
+    {% endif %}
+    {% if 'kyc_approval' in permissions %}
+    <a class="partner-tool-card kyc" href="{{url_for('partner_kyc')}}">
+      <span class="partner-tool-icon">✓</span><div><small>AUTHORIZED TOOL</small><h2>KYC Approval</h2><p>Review member verification requests assigned to you.</p></div><span class="partner-tool-arrow">→</span>
+    </a>
+    {% endif %}
+    {% if 'member_info' in permissions %}
+    <a class="partner-tool-card members" href="{{url_for('partner_members')}}">
+      <span class="partner-tool-icon">♙</span><div><small>AUTHORIZED TOOL</small><h2>Member Info</h2><p>View member information available to your permission level.</p></div><span class="partner-tool-arrow">→</span>
+    </a>
+    {% endif %}
+    {% if 'recent_winner' in permissions %}
+    <a class="partner-tool-card members" href="{{url_for('recent_winners')}}">
+      <span class="partner-tool-icon">🏆</span><div><small>AUTHORIZED TOOL</small><h2>Recently Winner</h2><p>See new winners and mark their prize money as sent.</p></div><span class="partner-tool-arrow">→</span>
+    </a>
+    {% endif %}
+    <a class="partner-tool-card payment" href="{{url_for('admin_payment_status')}}">
+      <span class="partner-tool-icon">◷</span><div><small>DEFAULT TOOL</small><h2>Payment Status</h2><p>Monitor payment status of every member in started Ekubs.</p></div><span class="partner-tool-arrow">→</span>
+    </a>
+    <a class="partner-tool-card members" href="{{url_for('admin_deleted_accounts')}}">
+      <span class="partner-tool-icon">🗑</span><div><small>DEFAULT TOOL</small><h2>Deleted Accounts</h2><p>View accounts that members have deleted and their reasons.</p></div><span class="partner-tool-arrow">→</span>
+    </a>
+    {% if not permissions %}
+    <div class="partner-empty-state"><span>!</span><h2>No permissions assigned</h2><p>Contact the owner administrator to receive partner permissions.</p></div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

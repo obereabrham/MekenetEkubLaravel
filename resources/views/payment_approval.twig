@@ -1,0 +1,104 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="container admin-payment-page">
+  <div class="admin-tool-head">
+    <div>
+      {% if back_url %}<a href="{{back_url}}" style="font-size:13px;font-weight:800;text-decoration:none">← Back to Ekubs</a><br>{% endif %}
+      <span class="admin-eyebrow">ADMIN CONTROL</span>
+      <h1>Payment Approval{% if ekub %} · {{ekub.name}}{% endif %}</h1>
+      <p>Review member payment submissions and approve or reject pending payments.</p>
+    </div>
+    <div class="payment-summary">
+      <span class="payment-summary-icon">▣</span>
+      <div><strong>{{rows|selectattr('status','equalto','pending')|list|length}}</strong><small>Pending review</small></div>
+    </div>
+  </div>
+
+  <div class="payment-toolbar">
+    <div class="payment-filter active" data-payment-filter="all">All</div>
+    <div class="payment-filter" data-payment-filter="pending">Pending</div>
+    <div class="payment-filter" data-payment-filter="rejected">Rejected</div>
+  </div>
+
+  <div class="payment-list">
+  {% for p in rows|rejectattr('status', 'equalto', 'approved') %}
+    <article class="payment-card" data-payment-status="{{p.status}}">
+      <div class="payment-card-main">
+        <div class="payment-avatar">{{(p.first_name|default('M'))|slice(0, 1)|upper}}</div>
+        <div class="payment-person">
+          <h3>{{p.first_name}} {{p.last_name}}</h3>
+          <span>@{{p.username}}</span>
+          <small>{{p.phone}}{% if p.email %} · {{p.email}}{% endif %}</small>
+        </div>
+      </div>
+      <div class="payment-ekub">
+        <small>EKUB</small><strong>{{p.ekub_name}}</strong>
+        <span>{{p.category}} · {{p.frequency}} · Period {{p.period_no}}</span>
+      </div>
+      {% set b = pay_bal(p) %}
+      <div class="payment-amount">
+        <small>USER PAID NOW</small><strong>{{'%.2f'|format(p.amount|default(0))}} ETB</strong>
+        <span>{{p.method|default('Not specified')}}{% if p.transaction_no %} · Ref {{p.transaction_no}}{% endif %}</span>
+        {% if p.payment_currency == 'USDT' and p.payment_currency_amount %}<span>Transfer amount: {{'%.8f'|format(p.payment_currency_amount)}} USDT · Rate {{'%.4f'|format(p.payment_exchange_rate)}} ETB/USDT</span>{% endif %}
+        <div class="pay-breakdown">
+          <div><span>Must pay (Ekub)</span><b>{{'%.2f'|format(b.must)}} ETB</b></div>
+          <div><span>Already approved</span><b>{{'%.2f'|format(b.paid)}} ETB</b></div>
+          <div><span>Left before this payment</span><b>{{'%.2f'|format(b.left)}} ETB</b></div>
+          {% if p.status == 'approved' %}<div><span>Approved</span><b>{{'%.2f'|format(p.approved_amount|default(0))}} ETB</b></div>{% endif %}
+          {% if p.status == 'pending' %}<div class="pay-left"><span>Left after approving this</span><b>{{'%.2f'|format([b.left - p.amount, 0]|max)}} ETB</b></div>{% endif %}
+          {% if b.penalty > 0 %}<div class="pay-pen"><span>Late penalty ({{b.days_late}} day{{ b.days_late == 1 ? '' : 's' }}) – not part of approval</span><b>{{'%.2f'|format(b.penalty)}} ETB</b></div>{% endif %}
+        </div>
+      </div>
+      <div class="payment-status-wrap">
+        <span class="payment-status payment-status-{{p.status|lower}}">{{p.status|capitalize}}</span>
+        {% if p.status == 'pending' %}<small>Manual review required: compare the transaction ID and receipt with the receiving account.</small>{% endif %}
+        {% if p.screenshot %}<a class="payment-view-shot" target="_blank" href="{{url_for('uploads', name: p.screenshot)}}">View Screenshot ↗</a>{% endif %}
+      </div>
+      {% if p.status == 'pending' %}
+      <div class="payment-actions">
+        <form method="post" action="{{url_for('payment_action', payment_id: p.id, action: 'approve')}}" class="payment-approve-form">{{ csrf_field() }}
+          <label class="approve-amt-label">Amount to approve (ETB)</label>
+          <input type="number" name="approved_amount" step="0.01" min="0.01" max="{{[p.amount, b.left]|min}}" value="{{'%.2f'|format([p.amount, b.left]|min)}}" required>
+          <button class="payment-approve" type="submit">✓ Approve this amount</button>
+        </form>
+        <form method="post" action="{{url_for('payment_action', payment_id: p.id, action: 'reject')}}" class="payment-reject-form">{{ csrf_field() }}
+          <input name="reason" placeholder="Rejection reason" required>
+          <button class="payment-reject" type="submit">Reject</button>
+        </form>
+      </div>
+      {% endif %}
+    </article>
+  {% else %}
+    <div class="payment-empty"><div>✓</div><h3>No payment submissions</h3><p>There are currently no payment records to review.</p></div>
+  {% endfor %}
+  </div>
+</div>
+<script>
+document.querySelectorAll('[data-payment-filter]').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('[data-payment-filter]').forEach(function(b){b.classList.remove('active')});
+    btn.classList.add('active');
+    var filter=btn.dataset.paymentFilter;
+    document.querySelectorAll('.payment-card').forEach(function(card){
+      card.style.display=(filter==='all'||card.dataset.paymentStatus===filter)?'grid':'none';
+    });
+  });
+});
+</script>
+<style>
+.pay-breakdown{margin-top:8px;display:grid;gap:3px;font-size:11px;min-width:210px}.pay-breakdown div{display:flex;justify-content:space-between;gap:12px}.pay-breakdown span{color:var(--muted)}.pay-breakdown b{color:var(--text)}.pay-left b{color:var(--green-dark,#0a8f3d)}.pay-pen span,.pay-pen b{color:#b42318}
+.payment-approve-form{display:flex;flex-direction:column;gap:6px}.approve-amt-label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}.payment-approve-form input{padding:9px 11px;border-radius:10px;border:1px solid var(--border,#e5e7eb);background:var(--surface,#fff);color:var(--text);font-weight:800}
+.payment-status-wrap{display:flex;flex-direction:column;gap:8px;align-items:flex-start}.payment-view-shot{display:inline-flex;padding:9px 13px;border-radius:10px;background:var(--surface-2,#f1f5f9);border:1px solid var(--border,#e5e7eb);color:var(--text);text-decoration:none;font-weight:800;font-size:11px;white-space:nowrap}
+.payment-view-shot:hover{background:var(--green-light);color:var(--green-dark)}
+.admin-payment-page .admin-tool-head{padding:20px 24px;margin:6px 0 18px;border-radius:18px}.admin-payment-page .admin-tool-head h1{font-size:clamp(1.45rem,2.5vw,2rem)}.admin-payment-page .admin-tool-head p{font-size:13px}.admin-payment-page .payment-summary{padding:9px 12px;gap:9px}.admin-payment-page .payment-summary-icon{width:32px;height:32px;border-radius:9px}
+.admin-payment-page .payment-toolbar{gap:7px;margin-bottom:12px}.admin-payment-page .payment-filter{padding:7px 12px;font-size:11px}
+.admin-payment-page .payment-list{gap:10px}.admin-payment-page .payment-card{grid-template-columns:minmax(175px,1.1fr) minmax(155px,.9fr) minmax(190px,1fr) minmax(170px,.95fr);grid-template-areas:"person ekub amount status" "person ekub amount actions";align-items:stretch;gap:10px 14px;padding:13px 15px;border-radius:16px;background:linear-gradient(135deg,var(--surface),color-mix(in srgb,var(--surface) 92%,var(--green-light)));box-shadow:0 5px 18px rgba(0,0,0,.08)}.admin-payment-page .payment-card:hover{transform:translateY(-1px);box-shadow:var(--shadow-hover)}
+.admin-payment-page .payment-card-main{grid-area:person;min-width:0;align-self:center;gap:9px}.admin-payment-page .payment-avatar{width:36px;height:36px;flex-basis:36px;border-radius:11px;font-size:13px}.admin-payment-page .payment-person{min-width:0}.admin-payment-page .payment-person h3{font-size:12px;overflow-wrap:anywhere}.admin-payment-page .payment-person span,.admin-payment-page .payment-person small{font-size:9px;overflow-wrap:anywhere}
+.admin-payment-page .payment-ekub{grid-area:ekub;min-width:0;align-self:center;padding-left:12px;border-left:1px solid var(--border)}.admin-payment-page .payment-ekub strong{font-size:12px;overflow-wrap:anywhere}.admin-payment-page .payment-ekub span{font-size:9px;line-height:1.4}
+.admin-payment-page .payment-amount{grid-area:amount;min-width:0;padding-left:12px;border-left:1px solid var(--border)}.admin-payment-page .payment-amount strong{font-size:12px}.admin-payment-page .payment-amount span{font-size:9px;overflow-wrap:anywhere}.admin-payment-page .pay-breakdown{min-width:0;margin-top:6px;gap:2px;font-size:9px}.admin-payment-page .pay-breakdown div{gap:6px}.admin-payment-page .pay-breakdown b{font-size:9px;text-align:right}
+.admin-payment-page .payment-status-wrap{grid-area:status;min-width:0;gap:5px;align-self:start}.admin-payment-page .payment-status{padding:5px 9px;font-size:9px}.admin-payment-page .payment-status-wrap small{font-size:9px;line-height:1.35;overflow-wrap:anywhere}.admin-payment-page .payment-view-shot{padding:7px 10px;border-radius:9px;font-size:10px}
+.admin-payment-page .payment-actions{grid-area:actions;display:grid;align-content:end;gap:7px;padding-top:9px;border-top:1px solid var(--border)}.admin-payment-page .payment-approve-form{gap:4px}.admin-payment-page .approve-amt-label{font-size:8px}.admin-payment-page .payment-approve-form input,.admin-payment-page .payment-reject-form input{min-width:0;width:100%;box-sizing:border-box;padding:7px 9px;border-radius:8px;font-size:10px}.admin-payment-page .payment-approve,.admin-payment-page .payment-reject{padding:8px 9px;border-radius:8px;font-size:10px}.admin-payment-page .payment-approve{width:100%}.admin-payment-page .payment-reject-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px}.admin-payment-page .payment-reject{white-space:nowrap}
+@media(max-width:1050px){.admin-payment-page .payment-card{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:"person status" "ekub amount" "actions actions"}.admin-payment-page .payment-ekub,.admin-payment-page .payment-amount{align-self:stretch}.admin-payment-page .payment-actions{grid-column:auto;border-top:1px solid var(--border);padding-top:10px}.admin-payment-page .payment-status-wrap{grid-column:auto;grid-row:auto;justify-self:start}}
+@media(max-width:650px){.admin-payment-page .admin-tool-head{padding:17px;border-radius:15px}.admin-payment-page .payment-card{grid-template-columns:minmax(0,1fr);grid-template-areas:"person" "ekub" "amount" "status" "actions";gap:9px;padding:12px}.admin-payment-page .payment-card-main,.admin-payment-page .payment-ekub,.admin-payment-page .payment-amount,.admin-payment-page .payment-status-wrap,.admin-payment-page .payment-actions{grid-column:auto;grid-row:auto;justify-self:stretch}.admin-payment-page .payment-ekub,.admin-payment-page .payment-amount{padding:8px 0 0;border-left:0;border-top:1px solid var(--border)}.admin-payment-page .payment-actions{display:grid}.admin-payment-page .payment-approve,.admin-payment-page .payment-reject{width:auto}}
+</style>
+{% endblock %}

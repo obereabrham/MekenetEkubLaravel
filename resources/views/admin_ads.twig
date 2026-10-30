@@ -1,0 +1,30 @@
+{% extends 'base.twig' %}
+{% block title %}Publish Ad | Mekenet Ekub{% endblock %}
+{% block content %}
+<div class="container ads-admin">
+  <div class="ads-head"><span class="admin-eyebrow">ADMIN CONTROL</span><h1>Publish Ad</h1><p>Up to 10 image ads. Posted ads slide automatically every 4 seconds on the member pages. Empty places are not shown.</p></div>
+  <div class="ads-grid">
+  {% for n in slots %}{% set a = ads|get(n) %}
+    <article class="ad-card">
+      <div class="ad-card-top"><b>Ad {{n}}</b><span class="ad-state {{ a ? 'on' : '' }}">{{ a ? 'Published' : 'Empty' }}</span></div>
+      <div class="ad-preview">{% if a %}<img src="{{url_for('static', filename: 'uploads/' ~ a.image)}}" alt="Ad {{n}}">{% else %}<span>No image</span>{% endif %}</div>
+      <form method="post" action="{{url_for('admin_ad_save', slot: n)}}" enctype="multipart/form-data">{{ csrf_field() }}
+        <input type="file" name="image" accept="image/*" required>
+        <button class="ad-btn" type="submit">{{ a ? 'Change' : 'Publish' }}</button>
+      </form>
+      {% if a %}<form method="post" action="{{url_for('admin_ad_delete', slot: n)}}" data-confirm="Remove ad {{n}}?" data-confirm-ok="Yes, remove">{{ csrf_field() }}<button class="ad-btn ad-del" type="submit">Remove</button></form>{% endif %}
+    </article>
+  {% endfor %}
+  </div>
+</div>
+<style>
+.ads-admin{max-width:1220px;padding:35px 20px 70px}.ads-head h1{margin:5px 0}.ads-head p{color:var(--muted);margin:0 0 22px}
+.ads-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.ad-card{background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:14px;box-shadow:var(--shadow);display:grid;gap:10px}
+.ad-card-top{display:flex;justify-content:space-between;align-items:center}
+.ad-state{font-size:10px;font-weight:900;padding:5px 9px;border-radius:99px;background:#eef0f2;color:#667085}.ad-state.on{background:var(--green-light);color:var(--green-dark)}
+.ad-preview{aspect-ratio:16/7;border-radius:12px;overflow:hidden;background:var(--surface-2);display:grid;place-items:center;color:var(--muted);font-size:12px}.ad-preview img{width:100%;height:100%;object-fit:cover}
+.ad-card input[type=file]{width:100%;font-size:11px;margin-bottom:6px}
+.ad-btn{width:100%;padding:10px;border:0;border-radius:10px;background:var(--green);color:#fff;font-weight:800;cursor:pointer}.ad-del{background:#d9534f}
+</style>
+{% endblock %}

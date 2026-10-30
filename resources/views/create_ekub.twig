@@ -1,0 +1,135 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="create-ekub-page">
+  <div class="create-ekub-hero">
+    <div>
+      <span class="create-eyebrow">ADMIN • EKUB MANAGEMENT</span>
+      <h1>{% if edit_mode|default(false) %}Edit Ekub{% else %}Create New Ekub{% endif %}</h1>
+      <p>{% if edit_mode|default(false) %}Update this open Ekub's details before members join.{% else %}Set up a new Ekub with its category, payment schedule, contribution amount and duration.{% endif %}</p>
+    </div>
+    <div class="create-hero-icon">＋</div>
+  </div>
+
+  <form method="post" {% if edit_mode|default(false) %}action="{{url_for('admin_edit_ekub', ekub_id: ekub.id)}}"{% endif %} enctype="multipart/form-data" class="create-ekub-form">{{ csrf_field() }}
+    <section class="create-form-card">
+      <div class="create-section-head">
+        <div class="create-section-icon">01</div>
+        <div><h2>Basic Information</h2><p>Give your Ekub a clear name and category.</p></div>
+      </div>
+
+      <div class="create-form-grid">
+        <div class="field-wrap field-full">
+          <label for="ekub-name">Ekub Name</label>
+          <input id="ekub-name" name="name" maxlength="80" value="{{ekub.name|default('')}}" placeholder="e.g. Student Monthly Ekub" required>
+        </div>
+        <div class="field-wrap">
+          <label for="ekub-category">Category</label>
+          <select id="ekub-category" name="category" required>
+            {% for x in categories %}<option value="{{x}}" {% if edit_mode|default(false) and ekub.category == x %}selected{% endif %}>{{x}}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field-wrap">
+          <label for="ekub-frequency">Payment Frequency</label>
+          <select id="ekub-frequency" name="frequency" required>
+            {% for x in frequencies %}<option value="{{x}}" {% if edit_mode|default(false) and ekub.frequency == x %}selected{% endif %}>{{x}}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field-wrap">
+          <label for="base-amount">Contribution Amount</label>
+          <div class="input-with-suffix"><input id="base-amount" type="number" step="0.01" min="0.01" name="base_amount" value="{{ekub.base_amount|default('')}}" placeholder="0.00" required><span>ETB</span></div>
+        </div>
+        <div class="field-wrap">
+          <label for="duration">Duration / Periods</label>
+          <div class="input-with-suffix"><input id="duration" type="number" name="duration" min="1" max="500" value="{{ekub.duration|default('')}}" placeholder="12" required><span>Periods</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="create-form-card item-upload-card" id="item-upload-section" hidden>
+      <div class="create-section-head">
+        <div class="create-section-icon image-icon">IMG</div>
+        <div><h2>Item Ekub Images</h2><p>Upload product images shown with an Item's Ekub.</p></div>
+      </div>
+      <div class="upload-note">Image upload is available <strong>only for Item's Ekub</strong>.</div>
+      {% if edit_mode|default(false) and existing_images %}<div class="existing-ekub-images"><strong>Current images</strong><div class="existing-ekub-image-grid">{% for image in existing_images %}<label class="existing-ekub-image"><img src="{{url_for('uploads', name: image)}}" alt="Ekub item"><span><input type="checkbox" name="remove_images[]" value="{{image}}"> Remove</span></label>{% endfor %}</div><small>Tick images you want to remove. Add new pictures below.</small></div>{% endif %}
+      <div class="image-upload-grid" id="imageGrid">
+        <button type="button" class="image-upload-box add-image-tile" id="addImageBtn" aria-label="Add another image">
+          <span class="upload-plus">＋</span>
+          <strong>Add image</strong>
+          <small>No limit - add as many as you need</small>
+        </button>
+      </div>
+      <p class="upload-count" id="imageCount">0 images selected</p>
+    </section>
+
+    <div class="create-form-actions">
+      <a href="{{url_for('admin_dashboard')}}" class="create-cancel-btn">Cancel</a>
+      <button class="create-submit-btn" type="submit"><span>{% if edit_mode|default(false) %}✓{% else %}＋{% endif %}</span> {% if edit_mode|default(false) %}Save Changes{% else %}Create Ekub{% endif %}</button>
+    </div>
+  </form>
+</div>
+
+<script>
+(function(){
+  const category = document.getElementById('ekub-category');
+  const section = document.getElementById('item-upload-section');
+  const grid = document.getElementById('imageGrid');
+  const addBtn = document.getElementById('addImageBtn');
+  const counter = document.getElementById('imageCount');
+  const itemCategory = "Item's Ekub";
+
+  function updateCount(){
+    const n = grid.querySelectorAll('.image-upload-box[data-has-file="1"]').length;
+    counter.textContent = n + (n === 1 ? ' image selected' : ' images selected');
+  }
+  function addBox(){
+    const box = document.createElement('div');
+    box.className = 'image-upload-box image-slot';
+    box.innerHTML = '<input type="file" name="images[]" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden>' +
+      '<button type="button" class="slot-remove" aria-label="Remove image">×</button>' +
+      '<img class="slot-preview" alt="" hidden>' +
+      '<span class="upload-plus">＋</span><strong>Choose image</strong><small>PNG, JPG, WEBP</small>';
+    const input = box.querySelector('input'), preview = box.querySelector('.slot-preview');
+    box.addEventListener('click', e => { if (!e.target.closest('.slot-remove')) input.click(); });
+    box.querySelector('.slot-remove').addEventListener('click', e => { e.stopPropagation(); box.remove(); updateCount(); });
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files);
+      if (!files.length) { box.dataset.hasFile = '0'; preview.hidden = true; updateCount(); return; }
+      box.dataset.hasFile = '1';
+      preview.src = URL.createObjectURL(files[0]); preview.hidden = false;
+      box.querySelector('strong').textContent = files.length > 1 ? files.length + ' images' : files[0].name;
+      box.querySelectorAll('.upload-plus,small').forEach(x => x.hidden = true);
+      updateCount();
+    });
+    grid.insertBefore(box, addBtn);
+    return box;
+  }
+  addBtn.addEventListener('click', () => addBox().querySelector('input').click());
+
+  function updateUploadVisibility(){
+    const isItem = category && category.value === itemCategory;
+    section.hidden = !isItem;
+    section.classList.toggle('is-visible', isItem);
+    if (!isItem) {
+      grid.querySelectorAll('.image-slot').forEach(x => x.remove());
+      updateCount();
+    }
+  }
+  category.addEventListener('change', updateUploadVisibility);
+  updateUploadVisibility();
+})();
+</script>
+<style>
+.image-upload-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px}
+.image-upload-box{position:relative;min-height:130px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;padding:10px;border:2px dashed var(--border,#cfdad4);border-radius:14px;background:var(--surface-2,transparent);color:inherit;cursor:pointer;overflow:hidden;font:inherit}
+.image-upload-box:hover{border-color:var(--primary,#16a05d)}
+.image-upload-box .slot-preview{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.image-upload-box .slot-preview[hidden]{display:none}
+.image-slot strong{position:relative;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem}
+.image-slot[data-has-file="1"] strong{background:rgba(0,0,0,.6);color:#fff;border-radius:6px;padding:2px 6px;margin-top:auto}
+.slot-remove{position:absolute;top:5px;right:5px;z-index:2;width:24px;height:24px;border:0;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:16px;line-height:1;cursor:pointer}
+.add-image-tile{border-style:solid;background:rgba(22,160,93,.08)}
+.upload-count{margin:10px 2px 0;font-size:.85rem;opacity:.7}
+.existing-ekub-images{margin:14px 0;color:var(--text,#1f2937)}.existing-ekub-images>strong{display:block;margin-bottom:9px}.existing-ekub-image-grid{display:flex;flex-wrap:wrap;gap:10px}.existing-ekub-image{display:grid;gap:6px;width:120px;padding:7px;border:1px solid var(--border,#d1d5db);border-radius:12px;background:var(--surface,#fff);font-size:.75rem}.existing-ekub-image img{width:100%;height:76px;object-fit:cover;border-radius:8px}.existing-ekub-image span{display:flex;align-items:center;gap:5px}.existing-ekub-images>small{display:block;margin-top:7px;opacity:.7}
+</style>
+{% endblock %}

@@ -1,0 +1,391 @@
+{% extends 'base.twig' %}
+
+{% block title %}
+Mekenet Ekub | Digital Ekub Platform
+{% endblock %}
+
+
+{% block content %}
+
+<!-- ================================= -->
+<!-- HERO -->
+<!-- ================================= -->
+
+<section class="hero-section">
+
+    <div class="hero-container">
+
+        <div class="hero-content">
+
+            <div class="hero-badge">
+                <span class="pulse-dot"></span>
+                Digital Ekub Platform
+            </div>
+
+
+            <h1>
+
+                Build your future
+
+                <span>
+                    together.
+                </span>
+
+            </h1>
+
+
+            <p class="hero-description">
+
+                Mekenet Ekub brings traditional Ekub
+                communities into a secure, transparent,
+                and modern digital platform.
+
+            </p>
+
+
+            <div class="hero-buttons">
+
+                <a
+                    href="{{url_for('register')}}"
+                    class="btn btn-primary btn-large"
+                    id="heroRegisterButton"
+                >
+                    Start Your Ekub Journey
+                    <span>→</span>
+                </a>
+
+                <a
+                    href="{{url_for('ekubs')}}"
+                    class="btn btn-soft btn-large"
+                >
+                    Explore Ekubs
+                </a>
+
+            </div>
+
+
+            <div class="hero-trust">
+
+                <span>✓ Secure</span>
+
+                <span>✓ Transparent</span>
+
+                <span>✓ Digital</span>
+
+            </div>
+
+        </div>
+
+
+        <div class="hero-visual">
+
+            <div class="floating-card card-one">
+
+                <div class="small-icon green">
+                    ✓
+                </div>
+
+                <div>
+
+                    <strong>
+                        Secure
+                    </strong>
+
+                    <span>
+                        Protected accounts
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="hero-circle">
+
+                <div class="hero-circle-inner">
+
+                    <img
+                        class="hero-logo"
+                        src="{{url_for('static', filename: 'images/mekenet-ekub-logo.png')}}"
+                        alt="Mekenet Ekub logo"
+                    >
+
+                    <span>
+                        MEKENET
+                    </span>
+
+                    <small>
+                        DIGITAL EKUB
+                    </small>
+
+                </div>
+
+            </div>
+
+
+            <div class="floating-card card-two">
+
+                <div class="small-icon blue">
+                    ₿
+                </div>
+
+                <div>
+
+                    <strong>
+                        Transparent
+                    </strong>
+
+                    <span>
+                        Track your Ekub
+                    </span>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================================= -->
+<!-- STATISTICS -->
+<!-- ================================= -->
+
+<section class="stats-section">
+
+    <div class="stats-container">
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon">
+                👥
+            </div>
+
+            <div>
+
+                <strong
+                    class="counter"
+                    data-target="{{registered_members}}"
+                >
+                    0
+                </strong>
+
+                <span>
+                    Registered Members
+                </span>
+
+            </div>
+
+        </div>
+
+
+        <div class="stat-card">
+
+            <div class="stat-icon blue-icon">
+                ◈
+            </div>
+
+            <div>
+
+                <strong
+                    class="counter"
+                    data-target="{{created_ekubs}}"
+                >
+                    0
+                </strong>
+
+                <span>
+                    Created Ekubs
+                </span>
+
+            </div>
+
+        </div>
+
+
+    </div>
+
+</section>
+
+
+<!-- ================================= -->
+<!-- HOW IT WORKS -->
+<!-- ================================= -->
+
+<section class="information-section">
+
+    <div class="section-heading">
+
+        <span class="section-label">
+            HOW IT WORKS
+        </span>
+
+        <h2>
+            Ekub made simple.
+        </h2>
+
+        <p>
+            A clear digital process from registration
+            to participation and payout.
+        </p>
+
+    </div>
+
+
+    <div class="process-grid">
+
+
+        <div class="process-card">
+
+            <div class="process-number">
+                01
+            </div>
+
+            <h3>
+                Register
+            </h3>
+
+            <p>
+                Create your secure Mekenet Ekub account
+                using your phone number and personal information.
+            </p>
+
+        </div>
+
+
+        <div class="process-card">
+
+            <div class="process-number">
+                02
+            </div>
+
+            <h3>
+                Verify
+            </h3>
+
+            <p>
+                Complete KYC verification before joining
+                active Ekubs.
+            </p>
+
+        </div>
+
+
+        <div class="process-card">
+
+            <div class="process-number">
+                03
+            </div>
+
+            <h3>
+                Choose
+            </h3>
+
+            <p>
+                Explore available Ekubs and select the
+                one that matches your needs.
+            </p>
+
+        </div>
+
+
+        <div class="process-card">
+
+            <div class="process-number">
+                04
+            </div>
+
+            <h3>
+                Participate
+            </h3>
+
+            <p>
+                Make your scheduled contributions and
+                follow your Ekub status digitally.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================================= -->
+<!-- RULE -->
+<!-- ================================= -->
+
+<section class="rule-section">
+
+    <div class="rule-card">
+
+        <div class="rule-icon">
+            %
+        </div>
+
+        <div>
+
+            <span class="section-label">
+                IMPORTANT RULE
+            </span>
+
+            <h2>
+                2% service fee
+            </h2>
+
+            <p>
+                A 2% service fee is deducted from the amount
+                received by an Ekub winner. The remaining
+                98% is the net payout.
+            </p>
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- ================================= -->
+<!-- CALL TO ACTION -->
+<!-- ================================= -->
+
+<section class="cta-section">
+
+    <div class="cta-card">
+
+        <div>
+
+            <span class="section-label">
+                START TODAY
+            </span>
+
+            <h2>
+                Ready to join your digital Ekub community?
+            </h2>
+
+            <p>
+                Create your account and begin your journey
+                with Mekenet Ekub.
+            </p>
+
+        </div>
+
+        <a
+            href="{{url_for('register')}}"
+            class="btn btn-primary btn-large"
+            id="ctaRegisterButton"
+        >
+            Get Started
+            →
+        </a>
+
+    </div>
+
+</section>
+
+{% endblock %}

@@ -1,0 +1,891 @@
+{% extends 'base.twig' %}
+
+{% block title %}Dashboard | Mekenet Ekub{% endblock %}
+
+{% block content %}
+{% include '_ad_slider.twig' %}
+{% include '_winner_celebration.twig' %}
+
+<style>
+/* Dashboard category showcase — self-contained styling */
+.dashboard-wrapper{max-width:1380px;margin:0 auto;padding:32px 34px 80px;position:relative;z-index:1}
+.dashboard-ekub-showcase{margin-top:38px;padding:0}
+.showcase-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:28px;margin:0 0 28px;padding:28px 30px;border:1px solid rgba(74,190,126,.20);border-radius:28px;background:linear-gradient(135deg,rgba(8,39,31,.92),rgba(7,29,35,.88));box-shadow:0 18px 45px rgba(0,0,0,.18);backdrop-filter:blur(12px)}
+.showcase-intro .section-label{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border-radius:999px;background:rgba(37,198,104,.10);border:1px solid rgba(37,198,104,.18);color:#42d77f;font-size:11px;font-weight:900;letter-spacing:.14em}
+.showcase-intro h2{margin:10px 0 8px;color:#f1faf5;font-size:clamp(1.8rem,3vw,2.65rem);line-height:1.08;letter-spacing:-.04em}
+.showcase-intro p{margin:0;color:#a9bbb5;line-height:1.7;font-size:14px;max-width:760px}
+.dashboard-view-all{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-width:145px;padding:13px 17px;border-radius:14px;background:linear-gradient(135deg,#087fb5,#0c9dce);border:1px solid rgba(255,255,255,.10);color:#fff;text-decoration:none;font-weight:900;box-shadow:0 12px 26px rgba(0,128,180,.18);transition:.2s ease}
+.dashboard-view-all:hover{transform:translateY(-2px);box-shadow:0 16px 30px rgba(0,128,180,.28)}
+.dashboard-category-list{display:grid;gap:24px}
+.dashboard-category-section{padding:22px;border-radius:25px;border:1px solid rgba(102,161,139,.20);background:linear-gradient(145deg,rgba(8,35,29,.88),rgba(8,27,31,.82));box-shadow:0 16px 38px rgba(0,0,0,.16);backdrop-filter:blur(10px)}
+.dashboard-category-header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:18px;padding:2px 2px 0}
+.dashboard-category-kicker{display:block;margin-bottom:5px;color:#49d982;font-size:10px;font-weight:900;letter-spacing:.17em}
+.dashboard-category-header h3{margin:0;color:#f3faf7;font-size:1.45rem;line-height:1.2;letter-spacing:-.025em}
+.dashboard-more-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 15px;border-radius:12px;background:rgba(19,150,92,.13);border:1px solid rgba(57,210,126,.22);color:#53dd8c;text-decoration:none;font-size:13px;font-weight:900;transition:.2s ease;white-space:nowrap}
+.dashboard-more-button:hover{transform:translateY(-2px);background:rgba(19,150,92,.21);border-color:rgba(57,210,126,.38)}
+.dashboard-category-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}
+.dashboard-sim-card{min-width:0;overflow:hidden;border-radius:20px;border:1px solid rgba(130,162,153,.17);background:#111a20;box-shadow:0 12px 30px rgba(0,0,0,.18);transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease}
+.dashboard-sim-card:hover{transform:translateY(-5px);border-color:rgba(48,203,113,.38);box-shadow:0 20px 38px rgba(0,0,0,.25)}
+.dashboard-sim-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 17px;background:linear-gradient(135deg,#22a957 0%,#159e9d 52%,#087fbd 100%)}
+.dashboard-sim-badge{max-width:68%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:7px 11px;border-radius:999px;background:rgba(255,255,255,.17);border:1px solid rgba(255,255,255,.14);color:#fff;font-size:11px;font-weight:900}
+.dashboard-sim-status{padding:6px 9px;border-radius:999px;background:rgba(0,0,0,.14);color:#fff;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+.dashboard-sim-body{padding:20px}
+.dashboard-sim-body h4{margin:0 0 16px;color:#f4faf7;font-size:1.25rem;line-height:1.25;overflow-wrap:anywhere}
+.dashboard-sim-meta{display:grid;border-top:1px solid rgba(141,166,158,.11)}
+.dashboard-sim-meta>div{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid rgba(141,166,158,.11)}
+.dashboard-sim-meta span{color:#91a39e;font-size:12px}
+.dashboard-sim-meta strong{color:#edf5f1;font-size:12px;text-align:right}
+.dashboard-sim-payout{margin-top:16px;padding:15px;border-radius:15px;background:linear-gradient(135deg,rgba(19,103,69,.28),rgba(17,72,67,.24));border:1px solid rgba(65,177,119,.12)}
+.dashboard-sim-payout span{display:block;color:#9fb2ab;font-size:11px}
+.dashboard-sim-payout strong{display:block;margin:5px 0 2px;color:#28d062;font-size:1.18rem;line-height:1.2}
+.dashboard-sim-payout small{display:block;color:#839b93;font-size:10px}
+.dashboard-sim-footer{padding:0 20px 20px}
+.dashboard-sim-footer a{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border-radius:12px;background:rgba(0,137,191,.09);border:1px solid rgba(0,164,220,.12);color:#16a9e8;text-decoration:none;font-size:12px;font-weight:900;transition:.2s ease}
+.dashboard-sim-footer a:hover{background:rgba(0,137,191,.16);transform:translateX(2px)}
+.dashboard-no-ekubs{text-align:center;padding:55px 25px;border:1px dashed rgba(104,160,141,.28);border-radius:24px;background:rgba(7,31,26,.5)}
+.dashboard-no-ekubs-icon{width:55px;height:55px;margin:0 auto 13px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,#22a957,#087fbd);color:#fff;font-weight:900;font-size:20px}
+.dashboard-no-ekubs h3{margin:0 0 6px;color:#eef8f4;font-size:20px}.dashboard-no-ekubs p{margin:0 auto 18px;color:#9eb1ab;font-size:13px}
+/* Make the dashboard's upper sections structured and consistent too. */
+.dashboard-hero{display:flex;align-items:center;justify-content:space-between;gap:28px;margin-bottom:26px;padding:30px;border:1px solid rgba(74,190,126,.18);border-radius:28px;background:linear-gradient(135deg,rgba(8,38,31,.90),rgba(7,29,35,.84));box-shadow:0 18px 45px rgba(0,0,0,.15)}
+.dashboard-hero-text{min-width:0}.dashboard-eyebrow{display:inline-block;color:#43d77f;font-size:10px;font-weight:900;letter-spacing:.16em;margin-bottom:8px}.dashboard-hero h1{margin:0;color:#f3faf6;font-size:clamp(2rem,4vw,3.3rem);letter-spacing:-.045em}.dashboard-hero h1 span{color:#11a8e5}.dashboard-hero p{margin:10px 0 0;max-width:720px;color:#a5b8b1;line-height:1.65}
+.account-status{display:flex;align-items:center;gap:12px;flex:0 0 auto;padding:13px 15px;border-radius:16px;background:rgba(41,196,111,.08);border:1px solid rgba(41,196,111,.17)}.status-check{width:36px;height:36px;display:grid;place-items:center;border-radius:11px;background:rgba(41,196,111,.15);color:#46df86;font-weight:900}.account-status strong,.account-status span{display:block}.account-status strong{color:#edf9f3;font-size:13px}.account-status span{margin-top:2px;color:#8fa79d;font-size:10px}
+.dashboard-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:15px;margin-bottom:34px}.dashboard-stat-card{display:flex;align-items:center;gap:13px;min-width:0;padding:18px;border-radius:19px;border:1px solid rgba(111,156,143,.16);background:rgba(8,30,30,.78);box-shadow:0 10px 25px rgba(0,0,0,.12)}.stat-symbol{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:13px;background:linear-gradient(135deg,rgba(36,193,104,.18),rgba(0,145,205,.15));color:#55dd8d;font-size:12px;font-weight:900}.stat-content span,.stat-content small{display:block;color:#90a59d;font-size:11px}.stat-content strong{display:block;margin-top:4px;color:#f1f8f5;font-size:22px;line-height:1.1}.stat-content small{margin-top:4px}
+.dashboard-section{margin-top:30px}.section-header{margin-bottom:16px}.section-label{color:#45d87f;font-size:10px;font-weight:900;letter-spacing:.15em}.section-header h2{margin:5px 0 4px;color:#eff8f4}.section-header p{margin:0;color:#93a9a0;font-size:13px}
+.dashboard-menu-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.dashboard-menu-card{display:flex;align-items:center;gap:13px;padding:17px;border-radius:17px;border:1px solid rgba(105,153,140,.15);background:rgba(8,29,29,.70);color:inherit;text-decoration:none;transition:.2s ease}.dashboard-menu-card:hover{transform:translateY(-3px);border-color:rgba(57,210,126,.3)}.menu-icon{width:38px;height:38px;display:grid;place-items:center;flex:0 0 38px;border-radius:11px;background:rgba(33,184,105,.10)}.menu-text{min-width:0;flex:1}.menu-text h3{margin:0;color:#edf7f3;font-size:13px}.menu-text p{margin:4px 0 0;color:#849b92;font-size:10px}.menu-arrow{color:#35d67c;font-size:18px}
+.dashboard-kyc-card,.information-panel{display:flex;align-items:flex-start;gap:16px;margin-top:22px;padding:22px;border-radius:20px;border:1px solid rgba(105,153,140,.15);background:rgba(8,29,29,.70)}.kyc-status-icon,.information-panel-icon{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border-radius:13px;background:rgba(40,167,69,.11);color:#4ade80;font-weight:900}.kyc-status-content span{color:#45d87f;font-size:10px;font-weight:900;letter-spacing:.12em}.kyc-status-content h2,.information-panel h2{margin:5px 0;color:#edf8f3;font-size:20px}.kyc-status-content p,.information-panel p{margin:0;color:#91a59e;font-size:12px;line-height:1.6;max-width:800px}
+@media(max-width:1050px){.dashboard-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-menu-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.dashboard-wrapper{padding:20px 15px 60px}.dashboard-hero{align-items:flex-start;flex-direction:column;padding:22px}.account-status{width:100%}.showcase-intro{align-items:flex-start;flex-direction:column;padding:22px}.dashboard-view-all{width:100%}.dashboard-category-section{padding:16px}.dashboard-category-header{align-items:flex-start;flex-direction:column}.dashboard-more-button{width:100%}.dashboard-category-grid{grid-template-columns:1fr}.dashboard-stats,.dashboard-menu-grid{grid-template-columns:1fr}.dashboard-sim-body{padding:17px}.dashboard-sim-footer{padding:0 17px 17px}}
+</style>
+
+<div class="dashboard-wrapper">
+
+
+<!-- =========================
+     WELCOME HEADER
+========================== -->
+
+<section class="dashboard-hero">
+
+    <div class="dashboard-hero-text">
+
+        <span class="dashboard-eyebrow">
+            MEKENET EKUB MEMBER AREA
+        </span>
+
+        <h1>
+            Welcome{% if session.get("username") %}
+            <span>{{session.get("username")}}</span>
+            {% endif %}
+        </h1>
+
+        <p>
+            Manage your Ekubs, payments, KYC verification,
+            profile and account status from one place.
+        </p>
+
+    </div>
+
+
+    <div class="account-status">
+
+        <div class="status-check">
+            ✓
+        </div>
+
+        <div>
+            <strong>Account Active</strong>
+
+            <span>
+                Mekenet Ekub member
+            </span>
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =========================
+     EKUB CATEGORY SHOWCASE
+========================== -->
+
+<section class="dashboard-ekub-showcase">
+
+    <div class="showcase-intro">
+        <div>
+            <span class="section-label">EKUB COMMUNITY</span>
+            <h2>Explore Ekubs by Category</h2>
+            <p>See up to three available Ekubs from each category. Touch <strong>More</strong> to see the complete category.</p>
+        </div>
+        <a href="{{url_for('ekubs')}}" class="dashboard-view-all">View All Ekubs <span>→</span></a>
+    </div>
+
+    {% if ekub_categories %}
+        <div class="dashboard-category-list">
+            {% for group in ekub_categories %}
+                <section class="dashboard-category-section">
+                    <div class="dashboard-category-header">
+                        <div>
+                            <span class="dashboard-category-kicker">CATEGORY</span>
+                            <h3>{{group.name}}</h3>
+                        </div>
+                        <a href="{{url_for('ekubs', category: group.name)}}" class="dashboard-more-button">More <span>→</span></a>
+                    </div>
+
+                    <div class="dashboard-category-grid">
+                        {% for ekub in group.ekubs|slice(0, 3) %}
+                            <article class="dashboard-sim-card">
+                                <div class="dashboard-sim-card-top">
+                                    <span class="dashboard-sim-badge">{{group.name}}</span>
+                                    <span class="dashboard-sim-status">{% if ekub['id'] in full_ids %}Full{% else %}{{ekub['status']|default('Open')|title}}{% endif %}</span>
+                                </div>
+
+                                <div class="dashboard-sim-body">
+                                    <h4>{{ekub['name']}}</h4>
+                                    <div class="dashboard-sim-meta">
+                                        <div><span>Frequency</span><strong>{{ekub['frequency']}}</strong></div>
+                                        <div><span>Base Amount</span><strong>{{format_amount(ekub['base_amount']|float)}} ETB</strong></div>
+                                        <div><span>Periods</span><strong>{{ekub['duration']}}</strong></div>
+                                    </div>
+                                    <div class="dashboard-sim-payout">
+                                        <span>Potential Net Payout</span>
+                                        <strong>{{format_amount((ekub['base_amount']|float * ekub['duration']|int) * 0.98)}} ETB</strong>
+                                        <small>98% after 2% service fee</small>
+                                    </div>
+                                </div>
+
+                                <div class="dashboard-sim-footer">
+                                    <a href="{{url_for('ekub_detail', ekub_id: ekub['id'])}}">View Details <span>→</span></a>
+                                </div>
+                            </article>
+                        {% endfor %}
+                    </div>
+                </section>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="dashboard-no-ekubs">
+            <div class="dashboard-no-ekubs-icon">E</div>
+            <h3>No Available Ekubs</h3>
+            <p>There are currently no open Ekubs available for joining.</p>
+            <a href="{{url_for('ekubs')}}" class="dashboard-more-button">Browse Ekubs <span>→</span></a>
+        </div>
+    {% endif %}
+
+</section>
+
+
+
+<!-- =========================
+     STATISTICS
+========================== -->
+
+<section class="dashboard-stats">
+
+    <!-- Available Ekubs -->
+
+    <div class="dashboard-stat-card green-card">
+
+        <div class="stat-symbol">
+            E
+        </div>
+
+        <div class="stat-content">
+
+            <span>
+                Available Ekubs
+            </span>
+
+            <strong
+                class="counter"
+                data-value="{{available_ekubs|default(0)}}">
+                {{available_ekubs|default(0)}}
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <!-- Joined Ekubs -->
+
+    <div class="dashboard-stat-card blue-card">
+
+        <div class="stat-symbol">
+            M
+        </div>
+
+        <div class="stat-content">
+
+            <span>
+                My Joined Ekubs
+            </span>
+
+            <strong
+                class="counter"
+                data-value="{{joined_ekubs|default(0)}}">
+                {{joined_ekubs|default(0)}}
+            </strong>
+
+        </div>
+
+    </div>
+
+
+    <!-- Total Paid -->
+
+    <div class="dashboard-stat-card green-card">
+
+        <div class="stat-symbol">
+            ETB
+        </div>
+
+        <div class="stat-content">
+
+            <span>
+                Total Paid
+            </span>
+
+            <strong>
+                <span id="dashboardTotalPaid">{{format_amount(total_paid|default(0)|float)}}</span>
+            </strong>
+
+            <small>
+                Ethiopian Birr
+            </small>
+
+        </div>
+
+    </div>
+
+
+    <!-- KYC -->
+
+    <div class="dashboard-stat-card blue-card">
+
+        <div class="stat-symbol">
+            K
+        </div>
+
+        <div class="stat-content">
+
+            <span>
+                KYC Status
+            </span>
+
+            {% if kyc_status == "approved" %}
+
+                <strong class="verified-text">
+                    Verified
+                </strong>
+
+            {% elseif kyc_status == "pending" %}
+
+                <strong class="pending-text">
+                    Under Review
+                </strong>
+
+            {% else %}
+
+                <strong class="unverified-text">
+                    Not Verified
+                </strong>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</section>
+
+
+<!-- =========================
+     QUICK MENU
+========================== -->
+
+<section class="dashboard-section">
+
+    <div class="section-header">
+
+        <div>
+
+            <span class="section-label">
+                QUICK ACCESS
+            </span>
+
+            <h2>
+                Your Account
+            </h2>
+
+            <p>
+                Access your Mekenet Ekub account features.
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <div class="dashboard-menu-grid">
+
+
+        <!-- Dashboard -->
+
+        <a href="{{url_for('dashboard')}}"
+           class="dashboard-menu-card">
+
+            <div class="menu-icon green-icon">
+                🏠
+            </div>
+
+            <div class="menu-text">
+
+                <h3>
+                    Dashboard
+                </h3>
+
+                <p>
+                    View your account overview.
+                </p>
+
+            </div>
+
+            <span class="menu-arrow">
+                →
+            </span>
+
+        </a>
+
+
+        <!-- Available Ekubs -->
+
+        <a href="{{url_for('ekubs')}}"
+           class="dashboard-menu-card">
+
+            <div class="menu-icon blue-icon">
+                💰
+            </div>
+
+            <div class="menu-text">
+
+                <h3>
+                    Available Ekubs
+                </h3>
+
+                <p>
+                    Browse open Ekub groups.
+                </p>
+
+            </div>
+
+            <span class="menu-arrow">
+                →
+            </span>
+
+        </a>
+
+
+        <!-- My Joined Ekubs -->
+
+        <a href="{{url_for('my_ekubs')}}"
+           class="dashboard-menu-card">
+
+            <div class="menu-icon green-icon">
+                👥
+            </div>
+
+            <div class="menu-text">
+
+                <h3>
+                    My Joined Ekubs
+                </h3>
+
+                <p>
+                    View the Ekubs you joined.
+                </p>
+
+            </div>
+
+            <span class="menu-arrow">
+                →
+            </span>
+
+        </a>
+
+
+        <!-- My Status -->
+
+        <a href="{{url_for('my_status')}}"
+           class="dashboard-menu-card">
+
+            <div class="menu-icon blue-icon">
+                📊
+            </div>
+
+            <div class="menu-text">
+
+                <h3>
+                    My Status
+                </h3>
+
+                <p>
+                    Check payments and periods.
+                </p>
+
+            </div>
+
+            <span class="menu-arrow">
+                →
+            </span>
+
+        </a>
+
+
+        <!-- Profile -->
+
+        <a href="{{url_for('profile')}}"
+           class="dashboard-menu-card">
+
+            <div class="menu-icon green-icon">
+                👤
+            </div>
+
+            <div class="menu-text">
+
+                <h3>
+                    My Profile
+                </h3>
+
+                <p>
+                    View and manage your profile.
+                </p>
+
+            </div>
+
+            <span class="menu-arrow">
+                →
+            </span>
+
+        </a>
+
+
+        <!-- KYC -->
+
+        <a href="{{url_for('kyc')}}"
+           class="dashboard-menu-card">
+
+            <div class="menu-icon blue-icon">
+                🔐
+            </div>
+
+            <div class="menu-text">
+
+                <h3>
+                    KYC Verification
+                </h3>
+
+                <p>
+                    Verify your identity.
+                </p>
+
+            </div>
+
+            <span class="menu-arrow">
+                →
+            </span>
+
+        </a>
+
+    </div>
+
+</section>
+
+
+<!-- =========================
+     KYC STATUS
+========================== -->
+
+<section class="dashboard-kyc-card">
+
+    {% if kyc_status == "approved" %}
+
+        <div class="kyc-status-icon approved">
+            ✓
+        </div>
+
+        <div class="kyc-status-content">
+
+            <span>
+                IDENTITY VERIFIED
+            </span>
+
+            <h2>
+                Your KYC has been approved
+            </h2>
+
+            <p>
+                Your identity has been verified. You can now
+                join eligible active Ekubs.
+            </p>
+
+        </div>
+
+
+    {% elseif kyc_status == "pending" %}
+
+        <div class="kyc-status-icon pending">
+            ⏳
+        </div>
+
+        <div class="kyc-status-content">
+
+            <span>
+                KYC UNDER REVIEW
+            </span>
+
+            <h2>
+                Your verification is being reviewed
+            </h2>
+
+            <p>
+                Your documents have been submitted and are
+                waiting for verification.
+            </p>
+
+        </div>
+
+
+    {% else %}
+
+        <div class="kyc-status-icon required">
+            !
+        </div>
+
+        <div class="kyc-status-content">
+
+            <span>
+                VERIFICATION REQUIRED
+            </span>
+
+            <h2>
+                Complete your KYC verification
+            </h2>
+
+            <p>
+                KYC approval is required before joining an
+                active Ekub.
+            </p>
+
+            <button
+                type="button"
+                class="primary-button"
+                onclick="openKycModal()">
+
+                Start KYC Verification
+
+            </button>
+
+        </div>
+
+    {% endif %}
+
+</section>
+
+
+<!-- =========================
+     2% SERVICE FEE
+========================== -->
+
+<section class="information-panel service-fee-panel">
+
+    <div class="information-panel-icon">
+        %
+    </div>
+
+    <div>
+
+        <span class="section-label">
+            SERVICE FEE RULE
+        </span>
+
+        <h2>
+            2% Service Fee
+        </h2>
+
+        <p>
+            When a member receives an Ekub payout,
+            a 2% service fee is deducted from the total
+            Ekub value. The member receives the remaining
+            98% as the net payout.
+        </p>
+
+    </div>
+
+</section>
+
+
+<!-- =========================
+     LATE PAYMENT
+========================== -->
+
+<section class="information-panel penalty-panel">
+
+    <div class="information-panel-icon">
+        !
+    </div>
+
+    <div>
+
+        <span class="section-label">
+            PAYMENT RULE
+        </span>
+
+        <h2>
+            Late Payment Penalty
+        </h2>
+
+        <p>
+            Payments must be completed during the applicable
+            payment period. Missing a payment deadline may
+            result in an automatically calculated late-payment
+            penalty according to the Ekub rules.
+        </p>
+
+    </div>
+
+</section>
+
+
+</div>
+
+<!-- =========================
+     KYC REQUIRED POPUP
+========================== -->
+
+<div
+    id="kycModal"
+    class="custom-modal"
+    onclick="closeKycModal(event)">
+
+
+<div
+    class="custom-modal-box"
+    onclick="event.stopPropagation()">
+
+
+    <button
+        type="button"
+        class="modal-close-button"
+        onclick="closeKycModal()">
+
+        ×
+
+    </button>
+
+
+    <div class="modal-large-icon">
+        🔐
+    </div>
+
+
+    <h2>
+        KYC Verification Required
+    </h2>
+
+
+    <p>
+        You must complete KYC verification and receive
+        approval before joining an active Ekub.
+    </p>
+
+
+    <div class="modal-actions">
+
+        <button
+            type="button"
+            class="secondary-button"
+            onclick="closeKycModal()">
+
+            Cancel
+
+        </button>
+
+
+        <a
+            href="{{url_for('kyc')}}"
+            class="primary-button">
+
+            Verify Now
+
+        </a>
+
+    </div>
+
+</div>
+
+
+</div>
+
+<script>
+
+/* =========================
+   KYC MODAL
+========================= */
+
+function openKycModal() {
+
+    const modal =
+        document.getElementById("kycModal");
+
+    if (!modal) return;
+
+    modal.classList.add("active");
+
+    document.body.classList.add("modal-open");
+
+}
+
+
+function closeKycModal(event) {
+
+    if (
+        event &&
+        event.target !== event.currentTarget
+    ) {
+        return;
+    }
+
+    const modal =
+        document.getElementById("kycModal");
+
+    if (!modal) return;
+
+    modal.classList.remove("active");
+
+    document.body.classList.remove("modal-open");
+
+}
+
+
+/* =========================
+   ESC KEY
+========================= */
+
+document.addEventListener(
+    "keydown",
+    function(event) {
+
+        if (event.key === "Escape") {
+
+            closeKycModal();
+
+        }
+
+    }
+);
+
+
+/* =========================
+   ANIMATED COUNTERS
+========================= */
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function() {
+
+        const counters =
+            document.querySelectorAll(".counter");
+
+
+        counters.forEach(
+            function(counter) {
+
+                const target =
+                    Number(
+                        counter.dataset.value || 0
+                    );
+
+
+                let current = 0;
+
+
+                const duration = 1000;
+
+                const steps = 40;
+
+                const increment =
+                    target / steps;
+
+
+                const interval =
+                    duration / steps;
+
+
+                const timer =
+                    setInterval(
+                        function() {
+
+                            current += increment;
+
+
+                            if (
+                                current >= target
+                            ) {
+
+                                current = target;
+
+                                clearInterval(timer);
+
+                            }
+
+
+                            counter.textContent =
+                                Math.floor(current);
+
+                        },
+                        interval
+                    );
+
+            }
+        );
+
+    }
+);
+
+</script>
+
+<script>
+(function () {
+    const availableEl = document.querySelector('.dashboard-stat-card.green-card:nth-child(1) .counter');
+    const joinedEl = document.querySelector('.dashboard-stat-card.blue-card:nth-child(2) .counter');
+    const paidEl = document.getElementById('dashboardTotalPaid');
+
+    function updateDashboardStats(data) {
+        if (!data) return;
+        if (availableEl) availableEl.textContent = Number(data.available_ekubs || 0);
+        if (joinedEl) joinedEl.textContent = Number(data.joined_ekubs || 0);
+        if (paidEl) paidEl.textContent = Number(data.total_paid || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    async function refreshDashboardStats() {
+        try {
+            const response = await fetch('{{url_for("dashboard_stats_api")}}', {
+                method: 'GET',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {'Accept': 'application/json'}
+            });
+            if (!response.ok) return;
+            updateDashboardStats(await response.json());
+        } catch (error) {
+            // Keep the last valid values visible if the network is temporarily unavailable.
+        }
+    }
+
+    refreshDashboardStats();
+    setInterval(refreshDashboardStats, 5000);
+})();
+</script>
+
+{% endblock %}

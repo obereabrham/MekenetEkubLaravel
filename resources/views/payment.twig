@@ -1,0 +1,155 @@
+{% extends 'base.twig' %}
+{% block content %}
+<style>
+.manual-payment{max-width:760px;margin:0 auto;padding:8px 0 30px}
+.pay-heading{display:flex;align-items:center;gap:13px;margin-bottom:18px}
+.pay-heading-icon{width:48px;height:48px;display:grid;place-items:center;border-radius:16px;background:linear-gradient(135deg,var(--green),var(--blue));color:#fff;font-size:21px;box-shadow:0 8px 24px rgba(24,148,122,.2)}
+.pay-summary{display:grid;gap:8px;margin:16px 0;padding:15px 17px;border:1px solid var(--border);border-radius:16px;background:var(--surface-2,#f8fafc)}.pay-summary .row{display:flex;justify-content:space-between;gap:12px;font-size:.9rem}.pay-summary .row span{color:var(--muted)}.pay-summary .row.left{border-top:1px dashed var(--border);padding-top:9px;font-weight:900}.pay-summary .row.left b{color:var(--green-dark,#12824e)}.pay-summary .row.pen b,.pay-summary .row.pen span{color:#b42318}
+.pay-heading h1{margin:0;font-size:clamp(1.35rem,4vw,1.8rem)}
+.pay-heading p{margin:4px 0 0;color:var(--muted)}
+.pay-steps{display:flex;align-items:center;gap:10px;margin:18px 0}
+.pay-step{display:flex;align-items:center;gap:8px;font-size:.78rem;font-weight:800;color:var(--muted)}
+.pay-step b{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:var(--surface-2);border:1px solid var(--border)}
+.pay-step.active{color:var(--text)}.pay-step.active b{color:#fff;background:var(--green);border-color:var(--green)}
+.pay-step-line{height:2px;flex:1;background:var(--border)}
+.pay-amount-card{padding:20px;border-radius:20px;color:white;background:linear-gradient(125deg,var(--green-dark,#12824e),var(--blue,#279ec1));box-shadow:0 12px 28px rgba(13,117,117,.2)}
+.pay-amount-card small{display:block;opacity:.84;font-weight:700}.pay-amount-card strong{display:block;margin:4px 0 2px;font-size:clamp(1.8rem,8vw,2.35rem);line-height:1.1}.pay-amount-card span{font-size:.85rem;opacity:.9}
+.manual-section{margin-top:22px}.manual-section h2{margin:0 0 10px;font-size:1rem}.manual-section .sub{margin:-4px 0 12px;color:var(--muted);font-size:.82rem}
+.method-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.method-choice{position:relative}.method-choice input{position:absolute;opacity:0;inset:0;width:100%;height:100%;cursor:pointer}
+.method-choice label{min-height:102px;padding:13px 8px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:7px;border:1px solid var(--border);border-radius:17px;background:var(--surface);cursor:pointer;transition:.18s}
+.method-choice input:checked+label{border:2px solid var(--green);background:color-mix(in srgb,var(--green) 9%,var(--surface));box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 13%,transparent)}
+.method-choice input:disabled+label{opacity:.48;cursor:not-allowed}
+.method-logo{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(140deg,var(--green-light,#e7f7ed),var(--sky-light,#e4f6fc));color:var(--green-dark,#12824e);font-weight:900;font-size:.85rem}
+.method-choice strong{font-size:.83rem}.method-choice small{font-size:.65rem;color:var(--muted)}
+.destination-card{margin-top:13px;padding:16px;border:1px solid var(--border);border-radius:17px;background:var(--surface-2,#f7fafc)}
+.destination-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.destination-top b{font-size:.92rem}.destination-top small{display:block;color:var(--muted);margin-top:3px}
+.destination-value{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px;padding:12px;border-radius:13px;background:var(--surface)}
+.destination-value span{font-weight:800;overflow-wrap:anywhere}.copy-btn{border:0;border-radius:10px;padding:8px 10px;background:var(--green);color:#fff;font-weight:800;cursor:pointer}
+.rate-note,.pay-note{font-size:.78rem;color:var(--muted);margin:8px 0 0;line-height:1.45}
+.manual-form{margin-top:18px;padding:17px;border:1px solid var(--border);border-radius:19px;background:var(--surface)}
+.manual-form label{display:block;margin:13px 0 6px;font-size:.82rem;font-weight:800}
+.manual-form input:not([type=checkbox]):not([type=file]){width:100%;box-sizing:border-box}
+.receipt-box{margin-top:13px;padding:14px;border:1px dashed color-mix(in srgb,var(--green) 55%,var(--border));border-radius:14px;background:color-mix(in srgb,var(--green) 5%,var(--surface))}
+.terms-box{display:flex;align-items:flex-start;gap:10px;padding:13px;margin-top:15px;background:var(--surface-2);border:1px solid var(--border);border-radius:14px;font-size:.78rem;line-height:1.45}
+.terms-box input{margin-top:3px;accent-color:var(--green)}.terms-box label{margin:0;font-weight:600}
+.confirm-btn{width:100%;margin-top:14px;padding:14px;border:0;border-radius:14px;background:linear-gradient(110deg,var(--green),var(--sky,#2da9cb));color:white;font-size:.95rem;font-weight:900;cursor:pointer;box-shadow:0 9px 22px rgba(28,155,130,.22)}
+.confirm-btn:disabled{opacity:.55;cursor:not-allowed}
+.pay-history{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:9px}.pay-history th,.pay-history td{padding:9px 6px;text-align:left;border-top:1px solid var(--border)}.pay-history th{font-size:.67rem;text-transform:uppercase;color:var(--muted)}
+.review-note{padding:13px 15px;margin-top:14px;border-radius:14px;border:1px solid color-mix(in srgb,var(--sky,#2da9cb) 25%,var(--border));background:color-mix(in srgb,var(--sky,#2da9cb) 7%,var(--surface));font-size:.82rem;line-height:1.45}
+.pay-late{background:#fff1ef;border:1px solid #f2c2bc;color:#9e332b;border-radius:12px;padding:10px 14px;font-size:.85rem;margin:12px 0}
+@media(max-width:520px){.method-grid{gap:7px}.method-choice label{min-height:93px;padding:10px 5px}.method-choice strong{font-size:.75rem}.destination-value{align-items:flex-start}.manual-form{padding:14px}}
+</style>
+<div class="card form-card manual-payment">
+  <div class="pay-heading">
+    <div class="pay-heading-icon">▣</div>
+    <div><h1>Confirm payment</h1><p>{{ekub.name}} · Period {{period_no}}</p></div>
+  </div>
+  <div class="pay-steps"><div class="pay-step active"><b>1</b> Choose method</div><div class="pay-step-line"></div><div class="pay-step active"><b>2</b> Pay &amp; confirm</div></div>
+  <div class="pay-amount-card">
+    <small>Amount to pay · ETB</small>
+    <strong>{{'%.2f'|format(bal.can_submit)}}</strong>
+    <span>{{ekub.name}} · Period {{period_no}}</span>
+  </div>
+  {% if bal.due %}<p class="pay-note">Due date: {{bal.due.format('d M Y, H:i')}} (UTC)</p>{% endif %}
+  <div class="pay-summary">
+    <div class="row"><span>Period contribution</span><b>{{'%.2f'|format(bal.must)}} ETB</b></div>
+    <div class="row"><span>Paid &amp; approved</span><b>− {{'%.2f'|format(bal.paid)}} ETB</b></div>
+    {% if bal.pending > 0 %}<div class="row"><span>Waiting for admin review</span><b>{{'%.2f'|format(bal.pending)}} ETB</b></div>{% endif %}
+    <div class="row left"><span>Remaining</span><b>{{'%.2f'|format(bal.left)}} ETB</b></div>
+    {% if bal.penalty > 0 %}<div class="row pen"><span>Late penalty ({{bal.days_late}} day{{ bal.days_late == 1 ? '' : 's' }} late)</span><b>+ {{'%.2f'|format(bal.penalty)}} ETB</b></div>{% endif %}
+  </div>
+  {% if bal.penalty > 0 %}<div class="pay-late">The late penalty is shown separately. Admin approval counts toward your Ekub contribution.</div>{% endif %}
+  {% if bal.payments %}
+  <div class="manual-section"><h2>Payment activity</h2>
+    <table class="pay-history"><tr><th>Date</th><th>Amount</th><th>Method</th><th>Status</th></tr>
+    {% for p in bal.payments %}<tr><td>{{(p.submitted_at|default(''))|slice(0, 10)}}</td><td>{{'%.2f'|format(p.amount)}} ETB</td><td>{{p.method}}</td><td><span class="pill">{{p.status}}</span>{% if p.status=='rejected' and p.rejection_reason %}<br><small>{{p.rejection_reason}}</small>{% endif %}</td></tr>{% endfor %}
+    </table>
+  </div>
+  {% endif %}
+  {% if bal.left <= 0 %}
+    <p class="review-note"><b>✓ This period is fully paid.</b></p>
+  {% elseif bal.can_submit <= 0 %}
+    <p class="review-note">Your payment is waiting for admin approval. Any remaining balance will be available after it is reviewed.</p>
+  {% else %}
+  <form class="manual-form" method="post" enctype="multipart/form-data">
+    {{csrf_field()}}
+    <div class="manual-section" style="margin-top:0">
+      <h2>Choose how you’ll pay</h2>
+      <p class="sub">Transfer to the receiving account, then submit the transaction ID and receipt.</p>
+      <div class="method-grid" id="methodGrid">
+        {% for m in methods %}
+        <div class="method-choice">
+          <input type="radio" name="method" id="method-{{loop.index}}" value="{{m}}" {% if loop.first %}checked{% endif %}>
+          <label for="method-{{loop.index}}">
+            <span class="method-logo">{% if m=='Telebirr' %}T{% elseif m=='CBE' %}CBE{% else %}◇{% endif %}</span>
+            <strong>{{m}}</strong>
+            <small>{% if m=='Binance Pay' %}USDT wallet{% else %}ETB transfer{% endif %}</small>
+          </label>
+        </div>
+        {% endfor %}
+      </div>
+      <div id="destinationCard" class="destination-card">
+        <div class="destination-top"><div><b id="destinationTitle">Receiving account</b><small id="accountHolder">{{payment_account_holder|default('')}}</small></div><small id="currencyLabel">ETB</small></div>
+        <div class="destination-value"><span id="accountNumber"></span><button class="copy-btn" type="button" id="copyAccount">Copy account</button></div>
+        <p class="rate-note" id="rateNote"></p>
+        <button class="copy-btn" type="button" id="copyTransferAmount" style="display:none;margin-top:9px">Copy exact USDT amount</button>
+      </div>
+    </div>
+
+    <label for="payAmount">Amount you are transferring (ETB)</label>
+    <input type="number" name="amount" id="payAmount" step="0.01" min="0.01" max="{{bal.can_submit}}" value="{{'%.2f'|format(bal.can_submit)}}" required>
+    <p class="pay-note">Enter the ETB value. For Binance Pay, the exact USDT amount is calculated below.</p>
+
+    <div class="manual-section">
+      <h2>Confirm your transfer</h2>
+      <label for="transactionNumber">Transaction ID / reference</label>
+      <input name="transaction_no" id="transactionNumber" maxlength="191" autocomplete="off" placeholder="Enter the reference on your receipt" required>
+      <div class="receipt-box">
+        <label for="receiptUpload" style="margin-top:0">Attach a transfer receipt</label>
+        <input id="receiptUpload" type="file" name="screenshot" required accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
+        <p class="pay-note">JPG, PNG, or WebP up to 8 MB. The receipt must show the transaction ID and amount.</p>
+      </div>
+      <div class="terms-box"><input type="checkbox" name="terms_accepted" value="1" id="termsAccepted" required><label for="termsAccepted">I confirm I transferred this amount to the account shown. I understand the payment stays pending until an administrator reviews the receipt and transaction ID.</label></div>
+      <button class="confirm-btn" type="submit">Submit for admin verification</button>
+      <p class="pay-note" style="text-align:center;margin-top:10px">Do not send money to any account other than the one displayed above.</p>
+    </div>
+  </form>
+  <script>
+  const accounts = {{payment_accounts|tojson}};
+  const rate = {{binance_etb_per_usdt|default(0)|tojson}};
+  const holder = {{payment_account_holder|default('')|tojson}};
+  const radios = [...document.querySelectorAll('input[name="method"]')];
+  const amountInput = document.getElementById('payAmount');
+  const amountHero = document.querySelector('.pay-amount-card strong');
+  const destination = document.getElementById('accountNumber');
+  const currencyLabel = document.getElementById('currencyLabel');
+  const rateNote = document.getElementById('rateNote');
+  const copyTransferAmount = document.getElementById('copyTransferAmount');
+  const submit = document.querySelector('.confirm-btn');
+  function selectedMethod(){ return radios.find(x => x.checked)?.value || radios[0]?.value || ''; }
+  function renderDestination(){
+    const method=selectedMethod(), account=accounts[method]||'', binance=method==='Binance Pay';
+    destination.textContent=account||'Account not configured';
+    document.getElementById('accountHolder').textContent=holder ? 'Account holder: '+holder : '';
+    currencyLabel.textContent=binance?'USDT':'ETB';
+    rateNote.textContent=binance ? (rate>0 ? 'Send exactly '+((parseFloat(amountInput.value)||0)/rate).toFixed(8)+' USDT · Rate: 1 USDT = '+rate.toFixed(2)+' ETB' : 'Binance conversion rate is not configured yet.') : 'Send the ETB amount shown above. An administrator will verify your transfer.';
+    copyTransferAmount.style.display=binance&&rate>0?'inline-flex':'none';
+    submit.disabled=!account||(binance&&rate<=0);
+  }
+  radios.forEach(r => r.addEventListener('change',renderDestination));
+  amountInput.addEventListener('input',function(){amountHero.textContent=(parseFloat(amountInput.value)||0).toFixed(2);renderDestination();});
+  document.getElementById('copyAccount').addEventListener('click',async function(){
+    const value=destination.textContent;
+    if(!value||value==='Account not configured') return;
+    try{await navigator.clipboard.writeText(value);this.textContent='Copied';setTimeout(()=>this.textContent='Copy',1200);}catch(_){}
+  });
+  copyTransferAmount.addEventListener('click',async function(){
+    try{await navigator.clipboard.writeText(((parseFloat(amountInput.value)||0)/rate).toFixed(8));this.textContent='USDT amount copied';setTimeout(()=>this.textContent='Copy exact USDT amount',1400);}catch(_){}
+  });
+  renderDestination();
+  </script>
+  {% endif %}
+</div>
+{% endblock %}

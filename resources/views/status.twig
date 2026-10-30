@@ -1,0 +1,140 @@
+{% extends 'base.twig' %}
+{% block content %}
+<style>
+.status-wrap{max-width:1100px;margin:0 auto;padding:10px 0 40px}
+.status-wrap>h1{font-size:clamp(1.6rem,4vw,2.2rem);font-weight:900;margin:0 0 22px;letter-spacing:-.02em}
+.status-card{background:var(--card-bg,#fff);border:1px solid var(--border,#e5e7eb);border-radius:22px;padding:24px;margin-bottom:24px;box-shadow:0 14px 36px rgba(15,23,42,.07);transition:transform .2s,box-shadow .2s}
+.status-card:hover{transform:translateY(-2px);box-shadow:0 18px 44px rgba(15,23,42,.11)}
+.status-head{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px;padding-bottom:16px;border-bottom:1px dashed var(--border,#e5e7eb)}
+.status-title{font-size:1.3rem;font-weight:800}
+.status-sub{color:var(--muted,#6b7280);font-size:.88rem;margin-top:4px}
+.status-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.status-badge{padding:8px 16px;border-radius:999px;background:linear-gradient(135deg,#e8f5e9,#d1fae5);color:#065f46;font-weight:800;font-size:.9rem}
+.ekub-state{padding:6px 12px;border-radius:999px;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;background:#fef3c7;color:#92400e}
+.ekub-state.started{background:#dbeafe;color:#1e40af}
+.leave-btn{padding:8px 16px;border-radius:12px;border:1px solid #fecaca;background:#fff1f2;color:#b42318;font-weight:800;cursor:pointer;transition:.2s}
+.leave-btn:hover{background:#dc2626;color:#fff;border-color:#dc2626}
+.status-table-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--border,#e5e7eb)}
+.table-modern{width:100%;border-collapse:collapse;min-width:720px}
+.table-modern th{background:rgba(16,185,129,.08);font-size:.74rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#6b7280)}
+.table-modern th,.table-modern td{padding:13px 16px;text-align:left}
+.table-modern td{border-top:1px solid var(--border,#eef0f2)}
+.table-modern tr:nth-child(even) td{background:rgba(0,0,0,.02)}
+.table-modern tbody tr:hover td{background:rgba(16,185,129,.06)}
+.paid,.unpaid,.pending-pay{display:inline-block;padding:5px 12px;border-radius:999px;font-size:.78rem;font-weight:800;text-transform:capitalize}
+.paid{background:#dcfce7;color:#0a8f3d}
+.unpaid{background:#fee2e2;color:#d32f2f}
+.pending-pay{background:#fef3c7;color:#92400e}
+.pay-btn{padding:8px 16px;border-radius:10px;text-decoration:none;font-weight:800;font-size:.85rem;transition:.2s}
+.pay-btn:hover{transform:translateY(-1px)}
+/* popup */
+.mk-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:9999;padding:18px}
+.mk-modal.open{display:flex}
+.mk-modal-box{background:var(--card-bg,#fff);border-radius:22px;max-width:400px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 30px 70px rgba(0,0,0,.3);animation:mkPop .22s ease}
+@keyframes mkPop{from{opacity:0;transform:scale(.9) translateY(10px)}to{opacity:1;transform:none}}
+.mk-modal-icon{width:62px;height:62px;border-radius:50%;background:#fee2e2;color:#dc2626;font-size:30px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.mk-modal-box h3{margin:0 0 8px;font-size:1.25rem}
+.mk-modal-box p{margin:0 0 22px;color:var(--muted,#6b7280);line-height:1.5}
+.mk-modal-actions{display:flex;gap:10px}
+.mk-modal-actions button{flex:1;padding:12px;border-radius:12px;border:0;font-weight:800;cursor:pointer}
+.mk-cancel{background:#f1f5f9;color:#334155}
+.mk-confirm{background:#dc2626;color:#fff}
+@media(max-width:600px){.status-card{padding:16px}}
+</style>
+
+<div class="status-wrap">
+<h1>My Status</h1>
+{% if data %}
+<div class="status-card" style="padding:18px 24px">
+<label for="ekubChooser" style="display:block;font-weight:800;margin-bottom:8px">Choose Ekub</label>
+<select id="ekubChooser" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--border,#e5e7eb);font-weight:700;background:var(--card-bg,#fff);color:inherit">
+<option value="">-- Select an Ekub --</option>
+{% for item in data %}{% set r = item[0] %}{% set pays = item[1] %}<option value="{{r.id}}" {% if request.args.get('ekub', null, 'int')==r.id %}selected{% endif %}>{{r.name}} ({{r.status}})</option>{% endfor %}
+</select>
+</div>
+{% else %}
+<div class="status-card">You have not joined any Ekub yet.</div>
+{% endif %}
+{% for item in data %}
+{% set r = item[0] %}{% set pays = item[1] %}
+<div class="status-card ekub-status-card" data-ekub-id="{{r.id}}" style="display:none">
+<div class="status-head">
+<div>
+<div class="status-title">{{r.name}}</div>
+<div class="status-sub">{{r.share_type}} • {{r.duration}} Periods</div>
+</div>
+<div class="status-right">
+<span class="ekub-state {{r.status}}">{{r.status}}</span>
+<div class="status-badge">{{r.contribution_amount}} ETB</div>
+{% if r.status in ['pending','open'] %}
+<button type="button" class="leave-btn" data-leave-url="{{url_for('leave_ekub', ekub_id: r.id)}}" data-leave-name="{{r.name}}">Leave Ekub</button>
+{% endif %}
+</div>
+</div>
+
+<div class="status-table-wrap">
+<table class="table-modern">
+<tr><th>Period</th><th>Must Pay</th><th>Paid</th><th>Left</th><th>Penalty</th><th>Status</th><th>Action</th></tr>
+{% for n in range(1,r.duration+1) %}
+{% set b = period_bal(r, n) %}
+{% set period_payments = pays|selectattr('period_no','equalto',n)|list %}
+{% set has_pay = period_payments|length>0 %}
+{% set latest_payment = period_payments|last %}
+<tr>
+<td>{{n}}</td>
+<td>{{'%.2f'|format(b.must)}} ETB</td>
+<td>{{'%.2f'|format(b.paid)}} ETB{% if b.pending>0 %}<br><small>+{{'%.2f'|format(b.pending)}} pending</small>{% endif %}</td>
+<td>{{'%.2f'|format(b.left)}} ETB</td>
+<td>{% if b.penalty>0 %}<span class="unpaid">{{'%.2f'|format(b.penalty)}} ETB</span>{% else %}–{% endif %}</td>
+<td>
+{% if b.fully_paid %}<span class="paid">paid</span>
+{% elseif b.pending>0 %}<span class="pending-pay">pending admin review</span>{% if latest_payment and latest_payment.transaction_no %}<br><small>{{latest_payment.method}} · Ref {{latest_payment.transaction_no}}</small>{% endif %}
+{% elseif b.paid>0 %}<span class="pending-pay">partial</span>
+{% else %}<span class="unpaid">unpaid</span>{% endif %}
+</td>
+<td>
+{% if r.status=='started' and not b.fully_paid and (n==1 or (n-1) in drawn[r.id]) %}
+{% if b.can_submit>0 %}<a class="btn pay-btn" href="{{url_for('pay', ekub_id: r.id, period_no: n)}}">{{ b.paid > 0 or has_pay ? 'Pay Remaining' : 'Pay Now' }}</a>
+{% else %}<a class="btn pay-btn" href="{{url_for('pay', ekub_id: r.id, period_no: n)}}">View</a>{% endif %}
+{% elseif r.status=='started' and not b.fully_paid %}
+<span class="pending-pay">Locked until Period {{n-1}} draw</span>
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+</div>
+{% endfor %}
+</div>
+
+<div class="mk-modal" id="leaveModal">
+  <div class="mk-modal-box">
+    <div class="mk-modal-icon">!</div>
+    <h3>Leave this Ekub?</h3>
+    <p id="leaveModalText">You can only leave before the Ekub starts.</p>
+    <form method="post" id="leaveForm">{{ csrf_field() }}
+      <div class="mk-modal-actions">
+        <button type="button" class="mk-cancel" id="leaveCancel">Cancel</button>
+        <button type="submit" class="mk-confirm">Yes, Leave</button>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+  var sel=document.getElementById('ekubChooser');
+  function showChosen(){document.querySelectorAll('.ekub-status-card').forEach(function(c){c.style.display=(sel&&sel.value&&c.dataset.ekubId===sel.value)?'block':'none'})}
+  if(sel){sel.addEventListener('change',showChosen);showChosen();}
+})();
+(function(){
+  var m=document.getElementById('leaveModal'),f=document.getElementById('leaveForm'),t=document.getElementById('leaveModalText');
+  document.querySelectorAll('[data-leave-url]').forEach(function(b){
+    b.addEventListener('click',function(){f.action=b.dataset.leaveUrl;t.textContent='Are you sure you want to leave "'+b.dataset.leaveName+'"? You can only leave before the Ekub starts.';m.classList.add('open');});
+  });
+  document.getElementById('leaveCancel').onclick=function(){m.classList.remove('open')};
+  m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open')});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')m.classList.remove('open')});
+})();
+</script>
+{% endblock %}

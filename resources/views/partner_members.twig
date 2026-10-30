@@ -1,0 +1,64 @@
+{% extends 'base.twig' %}
+{% block title %}Member Information | Partner{% endblock %}
+{% block content %}
+<div class="container partner-members-page">
+  <section class="partner-members-hero">
+    <div>
+      <span class="partner-eyebrow">AUTHORIZED MEMBER INFO</span>
+      <h1>Member Information</h1>
+      <p>View member information available to your partner permission.</p>
+    </div>
+    <div class="partner-count-badge">{{rows|length}} Member{{ rows|length == 1 ? '' : 's' }}</div>
+  </section>
+
+  {% if rows %}
+  <div class="member-search" style="display:flex;gap:8px;margin:0 0 16px"><input type="search" id="memberSearch" placeholder="Search by name, username, phone, email or ID..." style="flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text)"><button type="button" id="memberSearchBtn" class="btn btn-primary" style="min-width:52px" aria-label="Search">&#128269;</button></div>
+  <div class="partner-members-table-wrap">
+    <table class="partner-members-table">
+      <thead>
+        <tr>
+          <th>Member</th>
+          <th>Username</th>
+          <th>Phone</th>
+          <th>Email</th>
+          <th>KYC</th>
+          <th>Role</th>
+          <th>Documents</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for m in rows %}
+        <tr data-member-row>
+          <td>
+            <strong>{{m['first_name']|default('')}} {{m['last_name']|default('')}}</strong>
+          </td>
+          <td>{{m['username']|default('—')}}</td>
+          <td>{{m['phone']|default('—')}}</td>
+          <td>{{m['email']|default('—')}}</td>
+          {% set kyc = (m['kyc_status']|default('pending'))|lower %}
+          <td>
+            <span class="partner-status {{kyc}}">{{m['kyc_status']|default('Pending')}}</span>
+          </td>
+          <td>{{(m['role']|default('member'))|title}}</td>
+          <td>
+            {% if m['id_front'] %}
+              {% if m['personal_photo'] %}<a target="_blank" href="{{url_for('uploads', name: m['personal_photo'])}}">Photo</a> · {% endif %}              <a target="_blank" href="{{url_for('uploads', name: m['id_front'])}}">ID</a>{% if m['id_back'] %} · <a target="_blank" href="{{url_for('uploads', name: m['id_back'])}}">Back</a>{% endif %}{% if m['video_agreement'] %} · <a target="_blank" href="{{url_for('uploads', name: m['video_agreement'])}}">Video</a>{% endif %}
+              <br><small>{{m['id_type']|default('')}} {{m['id_number']|default('')}}{% if m['gender'] %} · {{m['gender']}}{% endif %}{% if m['dob'] %} · {{m['dob']}}{% endif %}</small>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p id="memberNoMatch" style="display:none;text-align:center;color:var(--muted);padding:20px">No members match your search.</p>
+  {% else %}
+  <div class="partner-members-empty">
+    <span class="partner-empty-icon">♙</span>
+    <h2>No members found</h2>
+    <p>There are currently no member records available.</p>
+  </div>
+  {% endif %}
+</div>
+<script>(function(){var i=document.getElementById('memberSearch'),b=document.getElementById('memberSearchBtn');function f(){var q=(i.value||'').toLowerCase().trim().split(/\s+/).filter(Boolean),n=0;document.querySelectorAll('[data-member-row]').forEach(function(r){var t=(r.dataset.search||r.textContent).toLowerCase(),ok=q.every(function(x){return t.indexOf(x)>-1});r.style.display=ok?'':'none';if(ok)n++});var e=document.getElementById('memberNoMatch');if(e)e.style.display=n?'none':'block'}i.addEventListener('input',f);b.addEventListener('click',f);i.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();f()}})})();</script>
+{% endblock %}

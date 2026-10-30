@@ -1,0 +1,35 @@
+{% if celebrate %}
+<div class="win-overlay" id="winOverlay">
+  <canvas id="winConfetti"></canvas>
+  <div class="win-box">
+    <div class="win-trophy">🏆</div>
+    <h2>Congratulations!</h2>
+    {% for w in celebrate %}<p class="win-line">You are the winner of <b>{{w.ekub_name}}</b> — Period {{w.period_no}}</p><p class="win-amount">{{format_amount(w.net_amount)}} ETB</p>{% endfor %}
+    <p class="win-note">The Mekenet Ekub team will contact you about your payout.</p>
+    <button type="button" class="win-btn" id="winClose">Thank you 🎉</button>
+  </div>
+</div>
+<style>
+.win-overlay{position:fixed;inset:0;z-index:99999;background:rgba(8,12,24,.78);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:18px}
+#winConfetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.win-box{position:relative;background:linear-gradient(160deg,#fffbe6,#fff);color:#1f2937;border-radius:26px;max-width:430px;width:100%;padding:34px 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.45);animation:winPop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes winPop{from{opacity:0;transform:scale(.6)}to{opacity:1;transform:none}}
+.win-trophy{font-size:68px;animation:winBounce 1.2s ease infinite}
+@keyframes winBounce{50%{transform:translateY(-8px) rotate(-6deg)}}
+.win-box h2{margin:6px 0 10px;font-size:1.9rem;background:linear-gradient(90deg,#f59e0b,#ef4444,#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.win-line{margin:6px 0;font-size:1rem}.win-amount{margin:2px 0 10px;font-size:1.7rem;font-weight:900;color:#16a05a}
+.win-note{color:#6b7280;font-size:.85rem;margin:8px 0 18px}
+.win-btn{border:0;padding:12px 26px;border-radius:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;font-weight:800;cursor:pointer;font-size:14px}
+</style>
+<script>
+(function(){
+  var ov=document.getElementById('winOverlay'),cv=document.getElementById('winConfetti'),cx=cv.getContext('2d'),W,H,P=[],run=true;
+  function size(){W=cv.width=innerWidth;H=cv.height=innerHeight}size();addEventListener('resize',size);
+  var cols=['#f59e0b','#ef4444','#8b5cf6','#10b981','#3b82f6','#ec4899'];
+  for(var i=0;i<160;i++)P.push({x:Math.random()*W,y:-Math.random()*H,r:4+Math.random()*6,c:cols[i%6],v:2+Math.random()*3,s:Math.random()*2-1,a:Math.random()*6});
+  (function f(){if(!run)return;cx.clearRect(0,0,W,H);P.forEach(function(p){p.y+=p.v;p.x+=p.s+Math.sin(p.a+=.05);if(p.y>H){p.y=-10;p.x=Math.random()*W}cx.fillStyle=p.c;cx.fillRect(p.x,p.y,p.r,p.r*1.6)});requestAnimationFrame(f)})();
+  function close(){run=false;ov.remove()}
+  document.getElementById('winClose').onclick=close;setTimeout(close,15000);
+})();
+</script>
+{% endif %}

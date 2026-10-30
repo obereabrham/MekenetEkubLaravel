@@ -1,0 +1,26 @@
+{% extends 'base.twig' %}{% block title %}Suspend Members | Admin{% endblock %}{% block content %}
+<div class="container admin-members-page">
+<div class="admin-tool-head"><div><span class="admin-eyebrow">ADMIN CONTROL</span><h1>Suspend Members</h1><p>All registered members. A suspended member cannot access the system and cannot register again with the same phone number or email.</p></div><div class="payment-summary"><span class="payment-summary-icon">&#9433;</span><div><strong>{{rows|length}}</strong><small>Members</small></div></div></div>
+<div class="member-search" style="display:flex;gap:8px;margin:0 0 16px"><input type="search" id="memberSearch" placeholder="Search by name, username, phone, email or ID..." style="flex:1;min-width:0;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text)"><button type="button" id="memberSearchBtn" class="btn btn-primary" style="min-width:52px" aria-label="Search">&#128269;</button></div>
+<div class="table-wrap"><table class="table">
+<tr><th>Profile</th><th>Name / Username</th><th>Phone / Email</th><th>KYC</th><th>Gender/DOB</th><th>ID</th><th>Status</th><th>Action</th></tr>
+{% for m in rows %}
+<tr data-member-row data-search="{{m.first_name}} {{m.last_name}} {{m.username}} {{m.phone}} {{m.email|default('')}} {{m.id_number|default('')}} {{m.status}}">
+<td>{% if m.profile_picture %}<img src="{{url_for('uploads', name: m.profile_picture)}}" width="60">{% endif %}</td>
+<td>{{m.first_name}} {{m.last_name}}<br>@{{m.username}}</td>
+<td>{{m.phone}}<br>{{m.email|default('')}}</td>
+<td>{{m.kyc_status|replace('_',' ')|title}}</td>
+<td>{{m.gender|default('—')}}<br>{{m.dob|default('')}}</td>
+<td>{{m.id_type|default('—')}}<br>{{m.id_number|default('')}}</td>
+<td>{% if m.status == 'active' %}<b style="color:#16a05a">Active</b>{% else %}<b style="color:#d34c4c">Suspended</b>{% endif %}</td>
+<td>
+{% if m.status == 'active' %}
+<form method="post" action="{{url_for('member_suspend_action', user_id: m.id, action: 'suspend')}}" data-confirm="Suspend {{m.first_name}} {{m.last_name}}? They will lose all access and cannot register again with this phone or email." data-confirm-ok="Yes, suspend">{{ csrf_field() }}<button class="btn" type="submit" style="background:#dc2626;color:#fff">Suspend</button></form>
+{% else %}
+<form method="post" action="{{url_for('member_suspend_action', user_id: m.id, action: 'activate')}}" data-confirm="Re-activate this member?" data-confirm-ok="Yes, activate" data-confirm-danger="false">{{ csrf_field() }}<button class="btn ghost" type="submit">Activate</button></form>
+{% endif %}
+</td></tr>
+{% else %}<tr><td colspan="8" style="text-align:center">No members registered yet.</td></tr>{% endfor %}
+</table></div>
+<p id="memberNoMatch" style="display:none;text-align:center;color:var(--muted);padding:20px">No members match your search.</p></div>
+<script>(function(){var i=document.getElementById('memberSearch'),b=document.getElementById('memberSearchBtn');function f(){var q=(i.value||'').toLowerCase().trim().split(/\s+/).filter(Boolean),n=0;document.querySelectorAll('[data-member-row]').forEach(function(r){var t=(r.dataset.search||r.textContent).toLowerCase(),ok=q.every(function(x){return t.indexOf(x)>-1});r.style.display=ok?'':'none';if(ok)n++});var e=document.getElementById('memberNoMatch');if(e)e.style.display=n?'none':'block'}i.addEventListener('input',f);b.addEventListener('click',f);i.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();f()}})})();</script>{% endblock %}

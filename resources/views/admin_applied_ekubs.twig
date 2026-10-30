@@ -1,0 +1,72 @@
+{% extends 'base.twig' %}
+{% block title %}Applied Ekubs | Mekenet Ekub{% endblock %}
+{% block content %}
+<div class="container ap-admin-page">
+  <div class="ap-head">
+    <div>
+      <span class="ap-eyebrow">ADMIN • APPLICATIONS</span>
+      <h1>Applied Ekubs</h1>
+      <p>Ekub styles requested by members. Approving an application creates the Ekub automatically.</p>
+    </div>
+    <a class="btn ghost" href="{{url_for('admin_dashboard')}}">← Admin Dashboard</a>
+  </div>
+
+  {% if applications %}
+  <div class="ap-grid">
+    {% for a in applications %}
+    <article class="ap-card">
+      <div class="ap-top"><span class="ap-cat">{{a.category}}</span><span class="ap-status st-{{a.status}}">{{a.status|capitalize}}</span></div>
+      <h3>{{a.name}}</h3>
+      <div class="ap-meta">
+        <div><small>Payment</small><strong>{{a.frequency}}</strong></div>
+        <div><small>Contribution</small><strong>{{format_amount(a.base_amount)}} ETB</strong></div>
+        <div><small>Periods</small><strong>{{a.duration}}</strong></div>
+        <div><small>Applicant</small><strong>{{a.first_name}} {{a.last_name}}</strong></div>
+        <div><small>Phone</small><strong>{{a.phone}}</strong></div>
+        <div><small>Applied</small><strong>{{(a.created_at|default(''))|slice(0, 10)}}</strong></div>
+      </div>
+      {% if a.note %}<p class="ap-note">“{{a.note}}”</p>{% endif %}
+
+      {% if a.status == 'pending' %}
+      <div class="ap-actions">
+        <form method="post" action="{{url_for('admin_approve_application', app_id: a.id)}}">{{ csrf_field() }}<button class="btn" type="submit">Approve &amp; create</button></form>
+        <form method="post" action="{{url_for('admin_reject_application', app_id: a.id)}}" class="ap-reject">{{ csrf_field() }}
+          <input name="reason" maxlength="300" placeholder="Reason (optional)">
+          <button class="btn ghost" type="submit">Reject</button>
+        </form>
+      </div>
+      {% elseif a.status == 'approved' %}
+      <div class="ap-actions"><a class="btn ghost" href="{{url_for('ekub_detail', ekub_id: a.created_ekub_id)}}">View created Ekub</a></div>
+      <small class="ap-by">Approved by {{a.reviewed_by|default('—')}}</small>
+      {% else %}
+      <small class="ap-by">Rejected by {{a.reviewed_by|default('—')}}{% if a.rejection_reason %} — {{a.rejection_reason}}{% endif %}</small>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="ap-empty"><div style="font-size:2.2rem">📝</div><h3>No applications yet</h3><p>When a member applies for an Ekub it will appear here.</p></div>
+  {% endif %}
+</div>
+
+<style>
+.ap-admin-page{padding-top:26px;padding-bottom:50px}
+.ap-head{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+.ap-eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.12em;opacity:.65}
+.ap-head h1{margin:4px 0 6px}.ap-head p{margin:0;opacity:.7}
+.ap-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:14px}
+.ap-card{padding:14px;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:14px;background:var(--surface,#fff);display:flex;flex-direction:column;gap:6px}
+.ap-card h3{margin:4px 0 6px;font-size:1.02rem;overflow-wrap:anywhere}
+.ap-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.ap-cat{font-size:.68rem;font-weight:800;padding:4px 9px;border-radius:999px;background:rgba(37,99,235,.1);color:var(--primary,#2563eb)}
+.ap-status{font-size:.68rem;font-weight:800;padding:3px 9px;border-radius:999px}
+.st-pending{background:rgba(245,158,11,.16);color:#a15c00}.st-approved{background:rgba(34,197,94,.16);color:#16803c}.st-rejected{background:rgba(220,38,38,.14);color:#b42318}
+.ap-meta{display:grid;gap:5px}.ap-meta div{display:flex;justify-content:space-between;gap:8px;font-size:.82rem}.ap-meta small{opacity:.6}
+.ap-note{margin:6px 0 0;font-size:.82rem;opacity:.8;overflow-wrap:anywhere}
+.ap-actions{display:grid;gap:8px;margin-top:8px}.ap-actions form{margin:0}.ap-actions .btn{width:100%;text-align:center;padding:8px 10px;font-size:.84rem}
+.ap-reject{display:flex;gap:6px}.ap-reject input{flex:1;min-width:0;padding:7px 9px}.ap-reject .btn{width:auto}
+.ap-by{opacity:.65;font-size:.78rem}
+.ap-empty{text-align:center;padding:50px 20px;border:1px dashed var(--border,rgba(127,127,127,.3));border-radius:16px}
+@media(max-width:600px){.ap-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}

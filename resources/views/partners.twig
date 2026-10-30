@@ -1,0 +1,26 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="container admin-partners-page">
+  <div class="admin-tool-head partners-head">
+    <div><span class="admin-eyebrow">ADMIN PORTAL</span><h1>Partner Management</h1><p>Create partners, assign permissions, and manage access securely.</p></div>
+    <div class="partner-count"><strong>{{rows|length}}</strong><span>Partners</span></div>
+  </div>
+  <div class="partner-layout">
+    <section class="partner-create card">
+      <div class="partner-section-title"><div class="partner-icon">+</div><div><h2>Add Partner</h2><p>Create a partner account and choose permissions.</p></div></div>
+      <form method="post" class="partner-form">{{ csrf_field() }}
+        <div class="partner-fields two"><label>First name<input name="first_name" placeholder="First name" required></label><label>Last name<input name="last_name" placeholder="Last name" required></label></div>
+        <div class="partner-fields two"><label>Username<input name="username" placeholder="Username" required></label><label>Phone<input name="phone" placeholder="09xxxxxxxx" required></label></div>
+        <label>Email<input name="email" type="email" placeholder="email@gmail.com"></label>
+        <label>Password<input name="password" type="password" placeholder="Password" required></label>
+        <div class="permissions-box"><div class="permissions-title">Permissions</div><label><input type="checkbox" name="permissions" value="payment_approval"><span><b>Payment Approval</b><small>Review member payments</small></span></label><label><input type="checkbox" name="permissions" value="kyc_approval"><span><b>KYC Approval</b><small>Review KYC submissions</small></span></label><label><input type="checkbox" name="permissions" value="member_info"><span><b>Member Info</b><small>View member information</small></span></label><label><input type="checkbox" name="permissions" value="recent_winner"><span><b>Recently Winner</b><small>See winners and mark prize money as sent</small></span></label></div>
+        <button class="btn partner-submit" type="submit">Add Partner <span>→</span></button>
+      </form>
+    </section>
+    <section class="partner-list-card card">
+      <div class="partner-section-title"><div class="partner-icon blue">◎</div><div><h2>Existing Partners</h2><p>Manage partner accounts and permissions.</p></div></div>
+      {% if rows %}<div class="partner-list">{% for p in rows %}<div class="partner-row"><div class="partner-avatar">{{(p.first_name|default('P'))|slice(0, 1)|upper}}</div><div class="partner-main"><strong>{{p.first_name}} {{p.last_name}}</strong><span>@{{p.username}} · {{p.phone}}</span></div><div class="partner-perms">{% for perm in (p.permissions|default(''))|split(',')|select %}<span>{{perm|replace('_',' ')|title}}</span>{% endfor %}</div><form method="post" action="{{url_for('delete_partner', pid: p.id)}}">{{ csrf_field() }}<button class="partner-delete" type="submit">Delete</button></form></div>{% endfor %}</div>{% else %}<div class="partner-empty"><div>+</div><h3>No partners yet</h3><p>Create your first partner account using the form.</p></div>{% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

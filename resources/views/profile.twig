@@ -1,0 +1,28 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="card form-card profile-page">
+  <h1>My Profile</h1>
+  <p>KYC: <span class="pill">{{user.kyc_status}}</span></p>
+  {% if user.kyc_status == 'approved' %}<p style="color:var(--muted)">Your information is locked after KYC approval. You can only change your profile picture.</p>{% endif %}
+  <div class="profile-fields">
+  {% for field,label in {'first_name':'First name','last_name':'Last name','username':'Username','phone':'Phone number','email':'Email address'} %}
+    <section class="profile-field">
+      <div class="profile-field-value"><span class="profile-label">{{label}}</span><strong>{{user[field]|default('Not set')}}</strong></div>
+      {% if user.kyc_status == 'approved' %}<span class="pill" title="Locked after KYC approval">🔒 Locked</span>
+      {% elseif edit_field == field %}
+        <form class="profile-edit-form" method="post" action="{{url_for('profile_edit', field: field)}}">{{ csrf_field() }}
+          <input name="value" value="{{user[field]|default('')}}" required {% if field=='email' %}type="email"{% elseif field=='phone' %}type="tel"{% else %}type="text"{% endif %}>
+          <button class="btn" type="submit">Continue</button><a class="btn ghost" href="{{url_for('profile')}}">Cancel</a>
+          
+        </form>
+      {% else %}<a class="btn ghost profile-edit-button" href="{{url_for('profile', edit: field)}}">Edit</a>{% endif %}
+    </section>
+  {% endfor %}
+  <section class="profile-field profile-picture-field">
+    <div class="profile-field-value"><span class="profile-label">Profile picture</span>{% if user.profile_picture %}<img class="profile-edit-avatar" src="{{url_for('static', filename: 'uploads/' ~ user.profile_picture)}}" alt="Profile picture">{% else %}<strong>Not set</strong>{% endif %}</div>
+    <form method="post" action="{{url_for('profile_picture_update')}}" enctype="multipart/form-data">{{ csrf_field() }}<input type="file" name="profile_picture" accept="image/*" required><button class="btn" type="submit">Update picture</button></form>
+  </section>
+  </div>
+  <br><a class="btn ghost" href="{{url_for('kyc')}}">KYC Verification</a> <a class="btn ghost" href="{{url_for('security_2fa')}}">Two-factor security</a>
+</div>
+{% endblock %}

@@ -1,0 +1,106 @@
+{% extends 'base.twig' %}{% block content %}
+<style>
+.kyc-slot{margin:6px 0 16px;padding:14px;border:1px dashed var(--border,#cbd5e1);border-radius:14px;background:rgba(127,127,127,.04)}
+.kyc-slot>label{display:block;font-weight:800;margin:0 0 8px}
+.kyc-slot-btns{display:flex;gap:8px;flex-wrap:wrap}
+.kyc-slot-btns button{flex:1;min-width:140px;padding:11px 12px;border-radius:12px;border:1px solid var(--border,#cbd5e1);background:var(--surface,#fff);color:inherit;font-weight:800;cursor:pointer}
+.kyc-slot-btns button:hover{border-color:#16a05a;color:#16a05a}
+.kyc-file{display:none}
+.kyc-preview{margin-top:10px;font-size:.85rem;color:var(--muted,#6b7280);display:flex;align-items:center;gap:10px;word-break:break-all}
+.kyc-preview img{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--border,#e5e7eb)}
+.kyc-preview video{width:140px;border-radius:10px}
+.kyc-slot.missing{border-color:#dc2626;background:rgba(220,38,38,.05)}
+.kyc-note{font-size:.85rem;color:var(--muted,#6b7280);margin:-6px 0 14px}
+.live-check-trigger{width:100%;padding:12px 14px;border:1px solid #d9e9d2;border-radius:12px;background:linear-gradient(110deg,#f1f8e9,#e8f8fb);color:#244535;font-weight:900;cursor:pointer}
+#liveCheckDialog{width:min(560px,94vw);max-height:94vh;padding:0;border:0;border-radius:24px;background:#f7faf8;color:#16231d;box-shadow:0 24px 80px #0007}
+#liveCheckDialog::backdrop{background:#07110fd9;backdrop-filter:blur(5px)}
+.live-dialog-body{padding:18px}
+.live-dialog-head{display:flex;align-items:center;gap:11px;margin-bottom:14px}
+.live-dialog-mark{display:grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#eaf5df;color:#4b8334;font-size:20px}
+.live-dialog-head strong{display:block;font-size:1rem}.live-dialog-head small{display:block;color:#6c7c73;margin-top:3px}
+.live-preview{position:relative;overflow:hidden;aspect-ratio:3/4;border-radius:21px;background:#07110f;display:grid;place-items:center}
+.live-preview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.live-face-guide{position:absolute;width:min(62%,270px);height:min(76%,360px);border:3px dashed #fff;border-radius:50%;box-shadow:0 0 0 999px #0002,0 0 25px #72db81a6;pointer-events:none}
+.live-state-indicator{position:absolute;top:14px;left:14px;padding:7px 10px;border-radius:40px;background:#0009;color:#fff;font-size:.7rem;font-weight:900;letter-spacing:.07em}
+.live-step-card{margin:13px 0;padding:14px;border:1px solid #e0e8e3;border-radius:16px;background:#fff}
+.live-step-card small{color:#398955;font-size:.68rem;font-weight:900;letter-spacing:.09em}
+.live-step-card p{margin:6px 0 0;line-height:1.5}
+.live-dialog-actions{display:flex;gap:8px}.live-dialog-actions button{flex:1;min-height:44px;border:0;border-radius:12px;font-weight:800;cursor:pointer}
+.live-dialog-actions .live-cancel{background:#e9eeeb;color:#34443c}.live-dialog-actions .live-next{background:#88b44a;color:#fff}
+.live-error{min-height:1.4em;color:#b42318;font-size:.82rem;margin:8px 2px 0}
+#agreementRecordDialog{width:min(560px,94vw);max-height:94vh;padding:0;border:0;border-radius:24px;background:#f7faf8;color:#16231d;box-shadow:0 24px 80px #0007}
+#agreementRecordDialog::backdrop{background:#07110fd9;backdrop-filter:blur(5px)}
+.agreement-record-body{padding:18px}.agreement-record-preview{overflow:hidden;aspect-ratio:3/4;max-height:58vh;border-radius:20px;background:#07110f}
+.agreement-record-preview video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.agreement-record-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}.agreement-record-actions button{flex:1;min-height:44px;border:0;border-radius:12px;background:#88b44a;color:#152313;font-weight:800;cursor:pointer}
+.agreement-record-actions button.secondary{background:#e9eeeb;color:#34443c}.agreement-record-actions button[hidden]{display:none}
+.agreement-record-status{min-height:1.4em;margin:8px 2px 0;color:#b42318;font-size:.82rem}
+</style>
+<div class="card form-card"><h1>KYC Verification</h1>{% if locked %}<span class="pill">Verified</span><p>Your KYC is approved and locked.</p>{% elseif kyc and kyc.status=='pending' %}<span class="pill">Under Review</span><p>Submitted successfully. Please wait for approval.</p>{% elseif kyc and kyc.status=='rejected' %}<div class="toast error">Rejected: {{kyc.rejection_reason}}</div><p>Please correct the information and resubmit.</p>{% endif %}
+{% if not locked and (not kyc or kyc.status=='rejected') %}
+<form method="post" enctype="multipart/form-data" id="kycForm" novalidate>{{ csrf_field() }}
+<label>Full Name</label><input name="full_name" value="{{ kyc ? kyc.full_name : me.first_name ~ ' ' ~ me.last_name }}" required>
+<label>Date of Birth</label><input type="date" name="dob" required>
+<label>Gender</label><select name="gender" required><option>Male</option><option>Female</option><option>Other</option></select>
+
+<div class="kyc-slot" data-slot>
+  <label>Personal Photo</label>
+  <div class="kyc-slot-btns"><button type="button" data-mode="upload">&#11014; Upload Photo</button><button type="button" data-mode="camera">&#128247; Take Photo</button></div>
+  <input class="kyc-file" type="file" name="personal_photo" accept="image/*" data-capture="user" data-kind="image">
+  <div class="kyc-preview"></div>
+</div>
+
+<label>ID Type</label><select name="id_type" id="idType" required><option>National ID</option><option>Passport</option></select>
+<label>ID/Passport Number</label><input name="id_number" required>
+
+<div class="kyc-slot" data-slot>
+  <label id="frontLabel">National ID &ndash; Front</label>
+  <div class="kyc-slot-btns"><button type="button" data-mode="upload">&#11014; Upload</button><button type="button" data-mode="camera">&#128247; Take Photo</button></div>
+  <input class="kyc-file" type="file" name="id_front" accept="image/*,.pdf" data-capture="environment" data-kind="image" id="frontInput">
+  <div class="kyc-preview"></div>
+</div>
+
+<div class="kyc-slot" data-slot id="backSlot">
+  <label>National ID &ndash; Back</label>
+  <div class="kyc-slot-btns"><button type="button" data-mode="upload">&#11014; Upload</button><button type="button" data-mode="camera">&#128247; Take Photo</button></div>
+  <input class="kyc-file" type="file" name="id_back" accept="image/*,.pdf" data-capture="environment" data-kind="image" id="backInput">
+  <div class="kyc-preview"></div>
+</div>
+
+<div class="kyc-slot" id="liveSlot">
+  <label>Live Face Check</label>
+  <p class="kyc-note">The camera stays inside this page. Blink and head movements are checked live; no live-check video is saved or uploaded.</p>
+  <button class="live-check-trigger" id="openLiveCheck" type="button">&#128247; Start live check in this page</button>
+  <input type="hidden" name="liveness_verified" id="livenessVerified" value="">
+  <div class="kyc-preview" id="liveCheckStatus" role="status"></div>
+</div>
+
+<div class="kyc-slot" data-slot>
+  <label>Separate Video Agreement</label>
+  <p class="kyc-note">Upload or record a separate short clip saying either &ldquo;I Agree by Mekenet Ekub Rules.&rdquo; or &ldquo;በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡&rdquo;</p>
+  <div class="kyc-slot-btns"><button type="button" data-mode="upload">&#11014; Upload Agreement Video</button><button type="button" id="openAgreementRecorder">&#127909; Record in this page</button></div>
+  <input class="kyc-file" type="file" name="video_agreement" accept="video/*" data-kind="video" id="agreementVideoInput">
+  <div class="kyc-preview"></div>
+</div>
+<button class="btn">Submit KYC</button>
+</form>
+<dialog id="liveCheckDialog">
+  <div class="live-dialog-body">
+    <div class="live-dialog-head"><span class="live-dialog-mark">&#9673;</span><div><strong>Live identity check</strong><small>Camera stays in this page · checks run on this device</small></div></div>
+    <div class="live-preview"><video id="livePreview" autoplay playsinline muted></video><div class="live-face-guide"></div><span class="live-state-indicator" id="liveRecIndicator">CAMERA READY</span></div>
+    <div class="live-step-card"><small id="liveStepCount">READY</small><p id="liveStepText">Allow camera access to start the live checks. No live-check clip will be created.</p></div>
+    <div class="live-dialog-actions"><button class="live-cancel" id="cancelLiveCheck" type="button">Cancel</button><button class="live-next" id="startLiveCheck" type="button">Allow camera and start</button><button class="live-next" id="nextLiveStep" type="button" hidden disabled>Continue</button></div>
+    <div class="live-error" id="liveError" role="status"></div>
+  </div>
+</dialog>
+<dialog id="agreementRecordDialog">
+  <div class="agreement-record-body">
+    <div class="live-dialog-head"><span class="live-dialog-mark">&#127909;</span><div><strong>Record agreement video</strong><small>Camera and microphone stay in this page</small></div></div>
+    <div class="agreement-record-preview"><video id="agreementRecordPreview" autoplay playsinline muted></video></div>
+    <p class="kyc-note" style="margin:10px 2px 0">Say: &ldquo;I Agree by Mekenet Ekub Rules.&rdquo; or &ldquo;በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡&rdquo; Recording stops after 20 seconds.</p>
+    <div class="agreement-record-actions"><button type="button" class="secondary" id="cancelAgreementRecording">Cancel</button><button type="button" id="startAgreementRecording">Start recording</button><button type="button" id="stopAgreementRecording" hidden>Stop recording</button><button type="button" id="useAgreementRecording" hidden>Use this video</button></div>
+    <div class="agreement-record-status" id="agreementRecordStatus" role="status"></div>
+  </div>
+</dialog>
+<script src="{{url_for('static', filename: 'js/kyc-liveness.js')}}" defer></script>
+{% endif %}</div>{% endblock %}

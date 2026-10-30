@@ -1,0 +1,112 @@
+{% extends 'base.twig' %}
+{% block title %}My Joined Ekubs | Mekenet Ekub{% endblock %}
+
+{% block content %}
+<div class="my-ekubs-page">
+    <section class="my-ekubs-hero">
+        <div class="my-ekubs-hero-copy">
+            <span class="my-ekubs-eyebrow">MEMBERSHIP PORTFOLIO</span>
+            <h1>My Joined Ekubs</h1>
+            <p>Track the Ekubs you have joined, your contribution for each period, and the next action available to you.</p>
+        </div>
+        <a href="{{url_for('ekubs')}}" class="my-ekubs-browse-btn">Browse Available Ekubs <span>→</span></a>
+    </section>
+
+    {% if rows %}
+    <section class="my-ekubs-summary">
+        <div class="my-ekubs-summary-card">
+            <span class="my-ekubs-summary-icon">E</span>
+            <div><small>Joined Ekubs</small><strong>{{rows|length}}</strong></div>
+        </div>
+        <div class="my-ekubs-summary-card">
+            <span class="my-ekubs-summary-icon blue">ETB</span>
+            <div><small>Memberships</small><strong>Active</strong></div>
+        </div>
+        <div class="my-ekubs-summary-card">
+            <span class="my-ekubs-summary-icon">✓</span>
+            <div><small>Account</small><strong>Member</strong></div>
+        </div>
+    </section>
+
+    <section class="my-ekubs-list">
+        {% for r in rows %}
+        <article class="my-ekub-card">
+            <div class="my-ekub-card-top">
+                <div>
+                    <span class="my-ekub-category">{{r.category}}</span>
+                    <h2>{{r.name}}</h2>
+                    <p class="my-ekub-meta"><span>{{r.frequency}}</span><b>•</b><span>{{r.duration}} periods</span></p>
+                </div>
+                <div class="my-ekub-status {% if r.member_status == 'active' or r.status == 'started' %}active{% endif %}">
+                    {% if r.status == 'started' %}Started{% elseif r.status == 'open' %}Open{% else %}{{r.status|capitalize}}{% endif %}
+                </div>
+            </div>
+
+            <div class="my-ekub-card-body">
+                <div class="my-ekub-metric">
+                    <span>Share</span>
+                    <strong>{{r.share_type|capitalize}}</strong>
+                </div>
+                <div class="my-ekub-metric">
+                    <span>Contribution</span>
+                    <strong>{{format_amount(r.contribution_amount|float)}} ETB</strong>
+                    <small>per period</small>
+                </div>
+                <div class="my-ekub-metric">
+                    <span>Membership</span>
+                    <strong>{{r.member_status|capitalize}}</strong>
+                </div>
+            </div>
+
+            <div class="my-ekub-card-footer">
+                <a href="{{url_for('ekub_detail', ekub_id: r.id)}}" class="my-ekub-detail-btn">View Details</a>
+                {% if r.status in ['pending','open'] %}
+                <form method="post" action="{{url_for('leave_ekub', ekub_id: r.id)}}" style="display:inline" class="mk-leave-form" data-name="{{r.name}}">{{ csrf_field() }}
+                    <button type="submit" class="my-ekub-leave-btn">Leave Ekub</button>
+                </form>
+                {% endif %}
+                {% if r.status == 'started' %}
+                <a href="{{url_for('pay', ekub_id: r.id, period_no: r.current_period|default(1))}}" class="my-ekub-pay-btn">Pay Current Period <span>→</span></a>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </section>
+    {% else %}
+    <section class="my-ekubs-empty">
+        <div class="my-ekubs-empty-icon">E</div>
+        <h2>No joined Ekubs yet</h2>
+        <p>When you join an available Ekub, it will appear here with your membership and contribution details.</p>
+        <a href="{{url_for('ekubs')}}" class="my-ekub-pay-btn">Find an Ekub <span>→</span></a>
+    </section>
+    {% endif %}
+</div>
+<style>
+.mk-modal{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:9999;padding:18px}
+.mk-modal.open{display:flex}
+.mk-modal-box{background:#fff;border-radius:22px;max-width:400px;width:100%;padding:30px 26px;text-align:center;box-shadow:0 30px 70px rgba(0,0,0,.3)}
+.mk-modal-icon{width:62px;height:62px;border-radius:50%;background:#fee2e2;color:#dc2626;font-size:30px;font-weight:900;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+.mk-modal-box h3{margin:0 0 8px;font-size:1.25rem}.mk-modal-box p{margin:0 0 22px;color:#6b7280;line-height:1.5}
+.mk-modal-actions{display:flex;gap:10px}.mk-modal-actions button{flex:1;padding:12px;border-radius:12px;border:0;font-weight:800;cursor:pointer}
+.mk-cancel{background:#f1f5f9;color:#334155}.mk-confirm{background:#dc2626;color:#fff}
+</style>
+<style>
+.my-ekub-leave-btn{display:inline-flex;align-items:center;gap:7px;background:#fff1f2;color:#b42318;border:1px solid #fecaca;padding:11px 18px;border-radius:12px;font-weight:800;font-size:13px;cursor:pointer;margin-right:10px;transition:.2s;font-family:inherit}
+.my-ekub-leave-btn::before{content:"⎋";font-size:15px}
+.my-ekub-leave-btn:hover{background:#dc2626;color:#fff;border-color:#dc2626;transform:translateY(-1px);box-shadow:0 8px 18px rgba(220,38,38,.28)}
+.my-ekub-leave-btn:active{transform:none}
+</style>
+<div class="mk-modal" id="leaveModal"><div class="mk-modal-box"><div class="mk-modal-icon">!</div><h3>Leave this Ekub?</h3><p id="leaveModalText"></p><div class="mk-modal-actions"><button type="button" class="mk-cancel" id="leaveCancel">Cancel</button><button type="button" class="mk-confirm" id="leaveOk">Yes, Leave</button></div></div></div>
+<script>
+(function(){
+  var m=document.getElementById('leaveModal'),t=document.getElementById('leaveModalText'),cur=null;
+  document.querySelectorAll('.mk-leave-form').forEach(function(f){
+    f.addEventListener('submit',function(e){e.preventDefault();cur=f;t.textContent='Are you sure you want to leave "'+f.dataset.name+'"?';m.classList.add('open');});
+  });
+  document.getElementById('leaveOk').onclick=function(){if(cur)cur.submit()};
+  document.getElementById('leaveCancel').onclick=function(){m.classList.remove('open')};
+  m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('open')});
+})();
+</script>
+{% endblock %}
+
