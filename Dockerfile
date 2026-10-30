@@ -32,7 +32,7 @@ RUN composer install --no-dev --optimize-autoloader
 # Set permissions for storage and bootstrap cache
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Explicitly configure Apache VirtualHost to point to Laravel's public directory and allow .htaccess overrides
+# Configure Apache document root to point to Laravel's public directory and allow .htaccess overrides
 RUN echo '<VirtualHost *:80>\n\
     DocumentRoot /var/www/html/public\n\
     <Directory /var/www/html/public>\n\
@@ -46,5 +46,5 @@ RUN echo '<VirtualHost *:80>\n\
 
 EXPOSE 80
 
-# Start Apache in the foreground
-CMD ["apache2-foreground"]
+# Use start.sh script to run migrations and start Apache
+CMD ["sh", "start.sh"]
