@@ -29,8 +29,10 @@ COPY . /var/www/html
 # Install composer dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Set permissions for storage and bootstrap cache
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Fix Laravel permissions
+RUN mkdir -p /var/www/html/storage/logs \
+    && chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Configure Apache document root to point to Laravel's public directory and allow .htaccess overrides
 RUN echo '<VirtualHost *:80>\n\
