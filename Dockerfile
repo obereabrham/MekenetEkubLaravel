@@ -1,33 +1,26 @@
-FROM php:8.2.35-fpm-alpine
+FROM php:8.2-apache
 
-RUN apk add --no-cache bash nginx supervisor libpq libzip icu-libs \
-    && apk add --no-cache --virtual .build-deps \
-       $PHPIZE_DEPS postgresql-dev libzip-dev icu-dev \
-    && docker-php-ext-install pdo_pgsql pdo_mysql intl zip opcache \
-    && apk del .build-deps
+RUN apt-get update && apt-get install -y \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    git \
+    curl
 
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-RUN cp /usr/local/etc/php/php.ini-production \
-    /usr/local/etc/php/php.ini
-
-COPY conf/php/docker-vars.ini /usr/local/etc/php/conf.d/docker-vars.ini
-COPY conf/php/www-overrides.conf /usr/local/etc/php-fpm.d/zz-overrides.conf
-COPY conf/nginx/nginx-site.conf /etc/nginx/http.d/default.conf
-COPY conf/supervisor/supervisord.conf /etc/supervisord.conf
-COPY conf/start.sh /start.sh
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
+COPY . /var/www/html
 
-COPY . .
+RUN composer install --no-dev --optimize-autoloader
 
-RUN chown -R www-data:www-data storage bootstrap/cache
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
-ENV APP_ENV=production
-ENV APP_DEBUG=false
-ENV LOG_CHANNEL=stderr
-ENV COMPOSER_ALLOW_SUPERUSER=1
+RUN sed -i -e 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
 
 EXPOSE 80
-
-CMD ["/start.sh"]
+CMD php artisan serve --host=0.0.0.0 --port=80
