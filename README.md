@@ -1,13 +1,13 @@
-# Mekenet Ekub — Laravel + MySQL
+# Mekenet Ekub — Laravel + MySQL / PostgreSQL
 
-This is the Laravel/PHP port of the supplied Flask Mekenet Ekub website. It keeps the original page design, CSS, JavaScript, logo, and main member/admin workflows, with MySQL migrations and Laravel routing, sessions, uploads, and mail configuration.
+This is the Laravel/PHP port of the supplied Flask Mekenet Ekub website. It keeps the original page design, CSS, JavaScript, logo, and main member/admin workflows, with Laravel routing, sessions, uploads, mail configuration, and MySQL/PostgreSQL connection support.
 The original Jinja templates were carried over as Twig templates so their layout and styling stay close to the supplied site. Laravel renders them through the small Twig view engine in `app/View`.
 
 ## Requirements
 
-- PHP 8.3–8.5, with PDO MySQL, OpenSSL, Mbstring, Fileinfo, and the standard Laravel PHP extensions
+- PHP 8.3–8.5, with PDO MySQL and/or PDO PostgreSQL, OpenSSL, Mbstring, Fileinfo, and the standard Laravel PHP extensions
 - Composer
-- MySQL 8.0+
+- MySQL 8.0+ or PostgreSQL 14+
 
 ## Local setup
 
@@ -28,6 +28,12 @@ The original Jinja templates were carried over as Twig templates so their layout
 On Windows PowerShell, copy the environment template with `Copy-Item .env.example .env` before editing it.
 
 If the database already has an admin user, the seeder leaves it as-is. If the admin variables are blank, the seeder does not create a default credential.
+
+## Render with Neon PostgreSQL
+
+In the Render web service environment, set `DB_CONNECTION=pgsql` and provide the Neon connection string as `DATABASE_URL` (or `DB_URL`). The connection string must be the one copied from the Neon dashboard; do not use `127.0.0.1` for a hosted database. If using separate settings instead, set `DB_HOST` to the Neon hostname, `DB_PORT=5432`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, and `DB_SSLMODE=require`.
+
+Also set `APP_ENV=production` and `APP_DEBUG=false`. Set `LOG_CHANNEL=stderr` so Laravel sends logs to Render instead of trying to append to `storage/logs/laravel.log`. After changing environment variables, redeploy and clear any cached Laravel configuration (`php artisan config:clear`) so the service reloads the Neon URL. Keep the database URL private.
 
 ## Site configuration
 
