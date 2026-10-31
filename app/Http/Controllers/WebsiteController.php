@@ -366,7 +366,7 @@ class WebsiteController
     {
         session()->regenerate(); session()->put(['user_id'=>$user['id'],'role'=>$user['role'],'username'=>$user['username'],'welcome'=>$user['first_login'] ? 'Welcome' : 'Welcome back']);
         session()->forget(['pending_2fa_user','pending_totp_secret','email_otp_login','email_otp_setup','email_otp_sensitive','pending_2fa_method']);
-        DB::table('users')->where('id',$user['id'])->update(['first_login'=>0]);
+        DB::table('users')->where('id',$user['id'])->update(['first_login'=>false]);
         return $this->go(match($user['role']) {'admin'=>'admin_dashboard','partner'=>'partner_dashboard',default=>'dashboard'});
     }
     public function verifyLogin(Request $request)
