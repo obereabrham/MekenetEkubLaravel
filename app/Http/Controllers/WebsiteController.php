@@ -330,7 +330,7 @@ class WebsiteController
             elseif (! in_array($request->input('agree'), ['yes','1'], true) && $request->input('terms') !== '1') $this->flash('You must agree to the terms.','error');
             elseif (DB::table('users')->where('username',$username)->orWhere('phone',$phone)->when($email,fn($q)=>$q->orWhere('email',$email))->exists()) $this->flash('Username, phone, or email already exists.','error');
             else {
-                DB::table('users')->insert(['first_name'=>$first,'last_name'=>$last,'username'=>$username,'phone'=>$phone,'email'=>$email,'password_hash'=>Hash::make($password),'role'=>'member','status'=>'active','kyc_status'=>'not_submitted','first_login'=>1,'twofa_method'=>'authenticator','twofa_enabled'=>0,'created_at'=>now()]);
+                DB::table('users')->insert(['first_name'=>$first,'last_name'=>$last,'username'=>$username,'phone'=>$phone,'email'=>$email,'password_hash'=>Hash::make($password),'role'=>'member','status'=>'active','kyc_status'=>'not_submitted','first_login'=>true,'twofa_method'=>'authenticator','twofa_enabled'=>false,'created_at'=>now()]);
                 $this->flash('Account created successfully. Please sign in with your password.','success');
                 return $this->go('login', ['registered'=>1]);
             }
