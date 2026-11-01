@@ -317,9 +317,21 @@ class ProfileController
         }
         if ($user->kyc_status === 'approved') return response()->json(['message' => 'Your identity has already been verified.'], 422);
 
+        // Mobile clients may send day/month dates from their locale's date input.
+        // Normalize supported entry formats before validating and persisting ISO dates.
+        $rawDob = trim((string) $request->input('dob'));
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'd.m.Y', 'Y/m/d', 'Y-n-j', 'j/n/Y', 'j-n-Y'] as $dobFormat) {
+            $parsedDob = \DateTimeImmutable::createFromFormat('!'.$dobFormat, $rawDob);
+            $dateErrors = \DateTimeImmutable::getLastErrors();
+            if ($parsedDob && ($dateErrors === false || ($dateErrors['warning_count'] === 0 && $dateErrors['error_count'] === 0)) && $parsedDob->format($dobFormat) === $rawDob) {
+                $request->merge(['dob' => $parsedDob->format('Y-m-d')]);
+                break;
+            }
+        }
+
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:160'],
-            'dob' => ['required', 'date', 'before:today'],
+            'dob' => ['required', 'date_format:Y-m-d', 'before:today'],
             'gender' => ['required', 'in:Male,Female,Other'],
             'id_type' => ['required', 'in:National ID,Passport'],
             'id_number' => ['required', 'string', 'max:80'],
