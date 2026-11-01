@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Support\BrandedEmail;
+use App\Support\UploadStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -124,8 +125,7 @@ class ProfileController
         DB::table('users')->where('id', $user->id)->update(['profile_picture' => $picture]);
 
         if ($oldPicture && str_starts_with($oldPicture, 'profile/')) {
-            $oldPath = public_path('static/uploads/'.$oldPicture);
-            if (is_file($oldPath)) @unlink($oldPath);
+            app(UploadStorage::class)->delete($oldPicture);
         }
 
         return response()->json(['message' => 'Profile picture updated.']);
@@ -346,7 +346,7 @@ class ProfileController
             ]);
             DB::table('users')->where('id', $user->id)->update(['kyc_status' => 'pending']);
         } catch (\Throwable $exception) {
-            foreach ($saved as $file) if ($file) @unlink(public_path('static/uploads/'.$file));
+            foreach ($saved as $file) if ($file) app(UploadStorage::class)->delete($file);
             throw $exception;
         }
 
@@ -356,13 +356,9 @@ class ProfileController
     private function storeUpload(?UploadedFile $file, string $folder = 'kyc'): string
     {
         if (! $file || ! $file->isValid()) throw ValidationException::withMessages(['files' => ['Choose a valid file.']]);
-        $directory = public_path('static/uploads/'.$folder);
-        if (! is_dir($directory)) mkdir($directory, 0775, true);
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
         $name = bin2hex(random_bytes(16)).'.'.$extension;
-        $file->move($directory, $name);
-
-        return $folder.'/'.$name;
+        return app(UploadStorage::class)->put($file, $folder.'/'.$name);
     }
 
     public function security(Request $request)

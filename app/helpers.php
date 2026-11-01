@@ -17,7 +17,13 @@ if (! function_exists('route_url')) {
             'pick_winner'=>'/admin/winners/{ekub_id}/{period_no}','recent_winners'=>'/admin/recent-winners','recent_winner_send'=>'/recent-winners/{payout_id}/send','admin_ads'=>'/admin/ads','admin_ad_save'=>'/admin/ads/{slot}','admin_ad_delete'=>'/admin/ads/{slot}/delete',
             'finished_ekubs'=>'/finished-ekubs','apply_ekub'=>'/apply-ekub','admin_applied_ekubs'=>'/admin/applied-ekubs','admin_approve_application'=>'/admin/applied-ekubs/{app_id}/approve','admin_reject_application'=>'/admin/applied-ekubs/{app_id}/reject','uploads'=>'/uploads/{name}',
         ];
-        if ($endpoint === 'static') return asset('static/'.ltrim((string) ($params['filename'] ?? ''), '/'));
+        if ($endpoint === 'static') {
+            $filename = ltrim((string) ($params['filename'] ?? ''), '/');
+            if (str_starts_with($filename, 'uploads/')) {
+                return route_url('uploads', ['name' => substr($filename, strlen('uploads/'))]);
+            }
+            return asset('static/'.$filename);
+        }
         $path = $paths[$endpoint] ?? '/';
         foreach ($params as $key => $value) {
             $placeholder = '{'.$key.'}';

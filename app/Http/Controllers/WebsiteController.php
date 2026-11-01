@@ -3,6 +3,7 @@ namespace App\Http\Controllers;
 
 use App\Support\BrandedEmail;
 use App\Support\EkubService;
+use App\Support\UploadStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -249,9 +250,13 @@ class WebsiteController
         $slug = $base ? trim(preg_replace('/[^\pL\pN_-]+/u', '-', $base), '-_') : bin2hex(random_bytes(16));
         $slug = mb_substr($slug ?: 'file', 0, 70);
         $name = $slug.'.'.$extension; $n = 2;
-        while (file_exists(public_path($directory.'/'.$name))) $name = $slug.'_'.($n++).'.'.$extension;
-        $file->move(public_path($directory), $name);
-        return ($folder ? trim($folder, '/').'/' : '').$name;
+        $uploads = app(UploadStorage::class);
+        $path = ($directory ? $directory.'/' : '').$name;
+        while ($uploads->exists($path)) {
+            $name = $slug.'_'.($n++).'.'.$extension;
+            $path = ($directory ? $directory.'/' : '').$name;
+        }
+        return $uploads->put($file, $path);
     }
     private function imageUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null): ?string
     {
@@ -495,7 +500,7 @@ class WebsiteController
                 DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$request->input('dob'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$video,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
                 DB::table('users')->where('id',$user['id'])->update(['kyc_status'=>'pending']);
                 $this->flash('KYC submitted. Please wait for approval.','success'); return $this->go('kyc');
-            } catch(Throwable $e) { foreach($saved as $file) @unlink(public_path('static/uploads/'.$file)); $this->flash($e->getMessage(),'error'); }
+            } catch(Throwable $e) { foreach($saved as $file) app(UploadStorage::class)->delete($file); $this->flash($e->getMessage(),'error'); }
         }
         return $this->page('kyc',['kyc'=>$this->row(DB::table('kyc_verifications')->where('user_id',$user['id'])->first()),'locked'=>false]);
     }
@@ -713,12 +718,7 @@ class WebsiteController
     }
     private function removeEkubImageFiles(array $paths): void
     {
-        $root=realpath(public_path('static/uploads'));
-        if(!$root)return;
-        foreach(array_unique(array_filter($paths)) as $relative){
-            $file=realpath(public_path('static/uploads/'.ltrim((string)$relative,'/\\')));
-            if($file&&str_starts_with(strtolower($file),strtolower($root.DIRECTORY_SEPARATOR))&&is_file($file))@unlink($file);
-        }
+        foreach(array_unique(array_filter($paths)) as $relative) app(UploadStorage::class)->delete((string) $relative);
     }
     public function editEkub(int $ekubId, Request $request)
     {
@@ -1068,13 +1068,13 @@ class WebsiteController
     public function adminAdSave(int $slot,Request $request)
     {
         if($slot<1||$slot>10)return $this->go('admin_ads');
-        try{$file=$request->file('image');$image=$this->imageUpload($file,'ads','ad-'.$slot);if(!$image)throw new \RuntimeException('Choose an image first.');$old=DB::table('ads')->where('slot',$slot)->value('image');DB::table('ads')->updateOrInsert(['slot'=>$slot],['image'=>$image,'updated_at'=>now()]);if($old)@unlink(public_path('static/uploads/'.$old));$this->flash("Ad {$slot} published.",'success');}
+        try{$file=$request->file('image');$image=$this->imageUpload($file,'ads','ad-'.$slot);if(!$image)throw new \RuntimeException('Choose an image first.');$old=DB::table('ads')->where('slot',$slot)->value('image');DB::table('ads')->updateOrInsert(['slot'=>$slot],['image'=>$image,'updated_at'=>now()]);if($old)app(UploadStorage::class)->delete((string) $old);$this->flash("Ad {$slot} published.",'success');}
         catch(Throwable $e){$this->flash($e->getMessage(),'error');}
         return $this->go('admin_ads');
     }
     public function adminAdDelete(int $slot)
     {
-        $old=DB::table('ads')->where('slot',$slot)->value('image');DB::table('ads')->where('slot',$slot)->delete();if($old)@unlink(public_path('static/uploads/'.$old));$this->flash("Ad {$slot} removed.",'success');return $this->go('admin_ads');
+        $old=DB::table('ads')->where('slot',$slot)->value('image');DB::table('ads')->where('slot',$slot)->delete();if($old)app(UploadStorage::class)->delete((string) $old);$this->flash("Ad {$slot} removed.",'success');return $this->go('admin_ads');
     }
     public function finishedEkubs()
     {
@@ -1108,10 +1108,70 @@ class WebsiteController
         if($count&&$application)$this->notifyMemberEvent((int)$application['user_id'],'application','Ekub application update',"Your application for {$application['name']} was not approved.".($reason?' Reason: '.$reason:''),'application.rejected:'.$appId);
         $this->flash($count?'Application rejected.':'This application is no longer pending.',$count?'success':'error');return $this->go('admin_applied_ekubs');
     }
-    public function uploads(string $name)
+    public function uploads(Request $request, string $name)
     {
-        $base=realpath(public_path('static/uploads'));$target=realpath(public_path('static/uploads/'.$name));
-        if(!$base||!$target||!str_starts_with($target,$base.DIRECTORY_SEPARATOR)||!is_file($target))abort(404);
+        try {
+            $name = UploadStorage::normalizePath($name);
+        } catch (Throwable) {
+            abort(404);
+        }
+
+        $private = UploadStorage::isPrivatePath($name);
+        if ($private && ! $request->hasValidSignature() && ! $this->canViewPrivateUpload($request, $name)) abort(403);
+
+        $uploads = app(UploadStorage::class);
+        $diskName = $uploads->diskName();
+        $disk = Storage::disk($diskName);
+        try {
+            if ($disk->exists($name)) {
+                if ($diskName === 'r2') {
+                    return redirect()->away($disk->temporaryUrl($name, now()->addMinutes($private ? 10 : 60)));
+                }
+
+                return response()->file($disk->path($name));
+            }
+        } catch (Throwable $exception) {
+            Log::warning('Upload storage could not read an object.', ['path' => $name, 'exception' => $exception->getMessage()]);
+        }
+
+        $base = realpath(public_path('static/uploads'));
+        $target = realpath(public_path('static/uploads/'.$name));
+        if (! $base || ! $target || ! str_starts_with(strtolower($target), strtolower($base.DIRECTORY_SEPARATOR)) || ! is_file($target)) abort(404);
+
         return response()->file($target);
+    }
+
+    private function canViewPrivateUpload(Request $request, string $path): bool
+    {
+        $user = $this->currentUser();
+        $userId = $user ? (int) $user['id'] : 0;
+        $role = $user['role'] ?? null;
+        if (! $user && $request->user('sanctum')) {
+            $user = (array) $request->user('sanctum')->getAttributes();
+            $userId = (int) ($user['id'] ?? 0);
+            $role = $user['role'] ?? null;
+        }
+
+        if (! $userId) return false;
+        if ($role === 'admin') return true;
+
+        $first = strtolower(explode('/', $path, 2)[0] ?? '');
+        $kycFile = in_array($first, ['kyc', 'id_passport', 'personal_photo', 'video'], true);
+        $paymentFile = $first === 'payments' || (! str_contains($path, '/') && str_starts_with(strtolower($path), 'payment-'));
+        if ($role === 'partner' && $this->currentUser()) {
+            if ($kycFile) return $this->partnerAllowed('kyc_approval') || $this->partnerAllowed('member_info');
+            if ($paymentFile) return $this->partnerAllowed('payment_approval');
+            return false;
+        }
+
+        if ($role !== 'member') return false;
+        if ($kycFile && DB::table('kyc_verifications')->where('user_id', $userId)->where(function ($query) use ($path) {
+            $query->where('id_front', $path)->orWhere('id_back', $path)->orWhere('personal_photo', $path)
+                ->orWhere('video_agreement', $path)->orWhere('liveness_video', $path);
+        })->exists()) return true;
+
+        return DB::table('payments')->where('user_id', $userId)->where(function ($query) use ($path) {
+            $query->where('screenshot', $path)->orWhere('screenshot', basename($path));
+        })->exists();
     }
 }

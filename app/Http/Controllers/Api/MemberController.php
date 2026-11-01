@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Support\EkubService;
+use App\Support\UploadStorage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -18,7 +19,7 @@ class MemberController
             ->filter(fn ($row) => trim((string) $row->image) !== '')
             ->map(fn ($row) => [
                 'slot' => (int) $row->slot,
-                'image_url' => url('static/uploads/'.ltrim((string) $row->image, '/')),
+                'image_url' => app(UploadStorage::class)->url((string) $row->image),
             ])
             ->values();
 
@@ -155,7 +156,7 @@ class MemberController
                         'submitted_at' => $payment->submitted_at,
                         'reviewed_at' => $payment->reviewed_at,
                         'approved_by' => $payment->approved_by,
-                        'screenshot_url' => url('static/uploads/'.ltrim((string) $payment->screenshot, '/')),
+                        'screenshot_url' => app(UploadStorage::class)->url((string) $payment->screenshot),
                     ])->values(),
                 ]);
             }
@@ -431,7 +432,7 @@ class MemberController
             'slots_remaining' => round(max(0, (float) $ekub['duration'] - $used), 2),
             'is_full' => (float) $ekub['duration'] - $used <= 0.000001,
             'joined' => $joined,
-            'images' => array_map(fn ($path) => url('static/uploads/'.ltrim((string) $path, '/')), $images),
+            'images' => array_map(fn ($path) => app(UploadStorage::class)->url((string) $path), $images),
             'starts_at' => $ekub['start_at'] ?? null,
         ];
     }

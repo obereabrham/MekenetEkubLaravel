@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Support\UploadStorage;
 use App\Models\User;
 use App\Support\BrandedEmail;
 use Illuminate\Http\Request;
@@ -440,7 +441,7 @@ class AuthController
             'username' => $user->username,
             'phone' => $user->phone,
             'email' => $user->email,
-            'profile_picture_url' => $user->profile_picture ? url('static/uploads/'.$user->profile_picture) : null,
+            'profile_picture_url' => $user->profile_picture ? app(UploadStorage::class)->url($user->profile_picture) : null,
             'kyc_status' => $user->kyc_status,
             'two_factor_enabled' => (bool) $user->twofa_enabled,
         ];

@@ -1,7 +1,10 @@
 <?php
 namespace App\Providers;
+use Aws\CommandInterface;
+use Aws\Middleware;
 use App\View\TwigEngine;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Twig\Environment;
@@ -52,6 +55,28 @@ class AppServiceProvider extends ServiceProvider
     }
     public function boot(): void
     {
+        // R2 does not implement S3 object ACLs. Flysystem's S3 adapter adds
+        // ACL=private to uploads by default, so strip that parameter from R2
+        // upload commands and rely on R2's private-by-default bucket access.
+        Storage::extend('r2', function ($app, array $config) {
+            $filesystem = $app['filesystem']->createS3Driver(array_merge($config, ['driver' => 's3']));
+            $handlerList = $filesystem->getClient()->getHandlerList();
+            if (! $handlerList->hasMiddleware('mekenet.r2.remove-acl')) {
+                $handlerList->appendInit(
+                    Middleware::mapCommand(static function (CommandInterface $command): CommandInterface {
+                        if (in_array($command->getName(), ['PutObject', 'CreateMultipartUpload'], true)) {
+                            unset($command['ACL']);
+                        }
+
+                        return $command;
+                    }),
+                    'mekenet.r2.remove-acl',
+                );
+            }
+
+            return $filesystem;
+        });
+
         $resolver=$this->app['view.engine.resolver'];
         $resolver->register('twig',fn()=>new TwigEngine($this->app->make('twig')));
         $this->app['view']->addExtension('twig','twig');

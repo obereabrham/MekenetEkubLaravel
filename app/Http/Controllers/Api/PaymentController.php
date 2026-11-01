@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Support\EkubService;
+use App\Support\UploadStorage;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -102,10 +103,8 @@ class PaymentController
         $currency = $isBinance ? 'USDT' : 'ETB';
         $currencyAmount = $isBinance ? round($amount / $exchangeRate, 8) : $amount;
         $receipt = $data['screenshot'];
-        $directory = public_path('static/uploads');
-        if (! is_dir($directory)) mkdir($directory, 0775, true);
         $filename = 'payment-'.Str::uuid().'.'.strtolower($receipt->getClientOriginalExtension());
-        $receipt->move($directory, $filename);
+        $screenshotPath = app(UploadStorage::class)->put($receipt, 'payments/'.$filename);
 
         try {
             $paymentId = DB::table('payments')->insertGetId([
@@ -117,7 +116,7 @@ class PaymentController
                 'penalty' => $balance['penalty'],
                 'method' => $method,
                 'transaction_no' => $transaction,
-                'screenshot' => $filename,
+                'screenshot' => $screenshotPath,
                 'status' => 'pending',
                 'approved_amount' => 0,
                 'verification_status' => 'not_checked',
@@ -128,13 +127,14 @@ class PaymentController
             ]);
         } catch (QueryException $exception) {
             if ($this->transactionExists($transaction)) {
-                @unlink($directory.DIRECTORY_SEPARATOR.$filename);
+                app(UploadStorage::class)->delete($screenshotPath);
 
                 return response()->json([
                     'message' => 'Duplicate Transaction ID Error: This transaction ID has already been submitted.',
                 ], 422);
             }
 
+            app(UploadStorage::class)->delete($screenshotPath);
             throw $exception;
         }
 
