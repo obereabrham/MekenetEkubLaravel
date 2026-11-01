@@ -65,9 +65,9 @@ class AuthController
             'role' => 'member',
             'status' => 'active',
             'kyc_status' => 'not_submitted',
-            'first_login' => 1,
+            'first_login' => true,
             'twofa_method' => 'authenticator',
-            'twofa_enabled' => 0,
+            'twofa_enabled' => false,
             'created_at' => now(),
         ]);
 
@@ -400,7 +400,7 @@ class AuthController
     {
         $user = User::query()->findOrFail($userId);
         $token = $user->createToken($this->deviceName($deviceName), ['member'], now()->addDays(30));
-        DB::table('users')->where('id', $userId)->update(['first_login' => 0]);
+        DB::table('users')->where('id', $userId)->update(['first_login' => false]);
 
         return response()->json([
             'token_type' => 'Bearer',
