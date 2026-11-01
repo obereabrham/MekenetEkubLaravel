@@ -246,7 +246,6 @@ class WebsiteController
         if (! in_array($extension, $allowed, true)) throw new \RuntimeException('Unsupported file type.');
         if ($file->getSize() > 50 * 1024 * 1024) throw new \RuntimeException('File size must be 50 MB or less.');
         $directory = 'static/uploads'.($folder ? '/'.trim($folder, '/') : '');
-        if (! is_dir(public_path($directory))) mkdir(public_path($directory), 0775, true);
         $slug = $base ? trim(preg_replace('/[^\pL\pN_-]+/u', '-', $base), '-_') : bin2hex(random_bytes(16));
         $slug = mb_substr($slug ?: 'file', 0, 70);
         $name = $slug.'.'.$extension; $n = 2;
