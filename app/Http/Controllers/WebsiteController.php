@@ -394,7 +394,7 @@ class WebsiteController
         $user=$this->currentUser(); if (! $user) return $this->go('login');
         if ($request->isMethod('post')) {
             if ($request->input('action') === 'disable') {
-                DB::table('users')->where('id',$user['id'])->update(['twofa_enabled'=>0,'totp_secret'=>null,'twofa_method'=>'authenticator']);
+                DB::table('users')->where('id',$user['id'])->update(['twofa_enabled'=>false,'totp_secret'=>null,'twofa_method'=>'authenticator']);
                 session()->forget(['pending_totp_secret','email_otp_setup']);
                 $this->flash('Two-factor sign-in has been disabled. Password sign-in is active.','success');
                 return $this->go('security_2fa');
@@ -423,12 +423,12 @@ class WebsiteController
         $user=$this->currentUser();
         if ($user && $this->verifyEmailOtp($user,trim((string)$request->input('code')),'setup')) {
             $nextMethod=$this->hasAuthenticator($user)?'both':'email';
-            DB::table('users')->where('id',$user['id'])->update(['twofa_method'=>$nextMethod,'twofa_enabled'=>1]);
+            DB::table('users')->where('id',$user['id'])->update(['twofa_method'=>$nextMethod,'twofa_enabled'=>true]);
             session()->forget('pending_totp_secret');
             $this->flash($nextMethod==='both'?'Email OTP and your authenticator app are both enabled. Choose either one at sign-in.':'Email OTP is enabled. Future sign-ins will require a code sent to your email.','success');
         } elseif ($user && ($secret=session('pending_totp_secret')) && (new Google2FA())->verifyKey($secret,trim((string)$request->input('code')))) {
             $nextMethod=$this->hasEmailOtp($user)?'both':'authenticator';
-            DB::table('users')->where('id',$user['id'])->update(['twofa_method'=>$nextMethod,'totp_secret'=>$secret,'twofa_enabled'=>1]);
+            DB::table('users')->where('id',$user['id'])->update(['twofa_method'=>$nextMethod,'totp_secret'=>$secret,'twofa_enabled'=>true]);
             session()->forget('pending_totp_secret');
             $this->flash($nextMethod==='both'?'Authenticator app verified. Email OTP and authenticator are both enabled; choose either at sign-in.':'Authenticator verified and enabled. Future sign-ins will require your password and authenticator code.','success');
         } else $this->flash('Code did not match or has expired. Try again or request a new email code.','error');
