@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Support\BrandedEmail;
 use App\Support\UploadStorage;
+use App\Support\VideoDuration;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -328,6 +329,9 @@ class ProfileController
                 break;
             }
         }
+        if (preg_match('/^\d{4}-\d{2}-(\d{2})$/', (string) $request->input('dob'), $dayMatch) && (int) $dayMatch[1] > 30) {
+            throw ValidationException::withMessages(['dob' => ['Choose a day from 01 to 30.']]);
+        }
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:160'],
@@ -342,6 +346,7 @@ class ProfileController
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
             'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
         ]);
+        VideoDuration::assertAgreementLength($data['video_agreement']);
         $saved = [];
         try {
             $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'));

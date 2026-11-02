@@ -99,6 +99,8 @@
             {% if session.get("role") == "admin" %}
             <nav class="member-shortcuts admin-shortcuts" aria-label="Admin navigation">
                 <a href="{{url_for('admin_dashboard')}}"><span class="shortcut-icon">⌂</span>Admin Dashboard</a>
+                <a href="{{url_for('admin_visits')}}"><span class="shortcut-icon">◉</span>Visits</a>
+                <a href="{{url_for('admin_merchants')}}"><span class="shortcut-icon">♙</span>Merchants</a>
                 <a href="{{url_for('admin_full_ekubs')}}"><span class="shortcut-icon">✓</span>Full Ekubs</a>
                 <a href="{{url_for('admin_pick_winners')}}"><span class="shortcut-icon">🏆</span>Pick Winners</a>
                 <a href="{{url_for('create_ekub')}}"><span class="shortcut-icon">＋</span>Create Ekub</a>
@@ -123,6 +125,7 @@
                 <a href="{{url_for('dashboard')}}"><span class="shortcut-icon">⌂</span>Dashboard</a>
                 <a href="{{url_for('ekubs')}}"><span class="shortcut-icon">◎</span>Available Ekubs</a>
                 <a href="{{url_for('my_ekubs')}}"><span class="shortcut-icon">▤</span>My Joined Ekubs</a>
+                <a href="{{url_for('merchant_portal')}}"><span class="shortcut-icon">♙</span>Merchant</a>
             </nav>
             {% endif %}
         {% else %}
@@ -174,6 +177,7 @@
                             <a href="{{url_for('settings')}}">Settings</a>
                         {% elseif session.get("role") == "admin" %}
                             <a href="{{url_for('admin_dashboard')}}">Admin Dashboard</a>
+                            <a href="{{url_for('admin_visits')}}">Visits</a>
                             <a href="{{url_for('admin_full_ekubs')}}">Full Ekubs</a>
                             <a href="{{url_for('admin_pick_winners')}}">Pick Winners</a>
                             <a href="{{url_for('admin_payment_approval')}}">Payment Approval</a>
@@ -300,6 +304,16 @@
                 <a href="{{url_for('contact')}}">
                     Contact
                 </a>
+
+                {% if session.get("user_id") %}
+                <a href="{{url_for('profile')}}#website-rating">
+                    Rate &amp; review this website
+                </a>
+                {% else %}
+                <a href="{{url_for('login')}}?return_to=%2Fprofile%23website-rating">
+                    Sign in to rate this website
+                </a>
+                {% endif %}
 
                 {% if not session.get("user_id") %}
                 <a href="{{url_for('login')}}">

@@ -123,6 +123,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
       if (mounted) {
         setState(() {
           _recordedVideo = clip;
+          _recordedSeconds = _seconds;
           _recording = false;
           _busy = false;
           _seconds = recordedSeconds;
@@ -371,7 +372,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                         ),
                         onPressed: _busy || _seconds < 5 ? null : _stopRecording,
                         icon: const Icon(Icons.stop_rounded),
-                        label: const Text('Stop recording'),
+                        label: Text(_seconds < 5 ? 'Keep recording · ${5 - _seconds}s' : 'Stop recording'),
                       ),
                     )
                   else

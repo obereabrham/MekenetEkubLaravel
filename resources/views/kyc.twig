@@ -40,7 +40,7 @@
 {% if not locked and (not kyc or kyc.status=='rejected') %}
 <form method="post" enctype="multipart/form-data" id="kycForm" novalidate>{{ csrf_field() }}
 <label>Full Name</label><input name="full_name" value="{{ kyc ? kyc.full_name : me.first_name ~ ' ' ~ me.last_name }}" required>
-<label>Date of Birth</label><input type="date" name="dob" min="1900-01-01" max="{{'now'|date('Y-m-d')}}" required>
+<label>Date of Birth (YYYY-MM-DD)</label><input type="date" name="dob" min="1900-01-01" max="{{'now'|date('Y-m-d')}}" value="{{kyc.dob|default('')}}" required><small class="kyc-note">Use the calendar to select your date. Day must be between 01 and 30.</small>
 <input type="hidden" name="video_duration_seconds" id="videoDurationSeconds" value="">
 <label>Gender</label><select name="gender" required><option>Male</option><option>Female</option><option>Other</option></select>
 

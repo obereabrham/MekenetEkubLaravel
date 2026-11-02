@@ -291,9 +291,9 @@
   const startAgreementButton = document.getElementById('startAgreementRecording');
   const stopAgreementButton = document.getElementById('stopAgreementRecording');
   const useAgreementButton = document.getElementById('useAgreementRecording');
-  let agreementStream = null, agreementRecorder = null, agreementTimer = 0;
+  let agreementStream = null, agreementRecorder = null, agreementTimer = 0, agreementStartedAt = 0;
   let agreementChunks = [], agreementBlob = null, agreementObjectUrl = null;
-  let agreementCancelled = false, agreementStartedAt = 0, agreementDurationSeconds = 0, agreementClock = 0, agreementGenerated = false;
+  let agreementCancelled = false, agreementDurationSeconds = 0, agreementClock = 0, agreementGenerated = false;
   const agreementDurationInput = document.getElementById('videoDurationSeconds');
 
   function stopAgreementTracks() {
@@ -453,6 +453,13 @@
   });
 
   form.addEventListener('submit', function (event) {
+    const dob = form.elements.namedItem('dob').value;
+    const dobDay = Number(dob.slice(-2));
+    if (!dob || dobDay < 1 || dobDay > 30) {
+      event.preventDefault();
+      alert('Choose a valid date of birth. The day must be between 01 and 30.');
+      return;
+    }
     let firstMissing = null;
     const uploadedDuration = Number(agreementDurationInput.value);
     if (!Number.isFinite(uploadedDuration) || uploadedDuration < 5 || uploadedDuration > 10) {

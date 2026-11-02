@@ -24,5 +24,21 @@
   </section>
   </div>
   <br><a class="btn ghost" href="{{url_for('kyc')}}">KYC Verification</a> <a class="btn ghost" href="{{url_for('security_2fa')}}">Two-factor security</a>
+  <p><a class="btn" href="{{url_for('merchant_portal')}}">{% if user.role == 'merchant' %}Merchant dashboard{% else %}Merchant account{% endif %}</a></p>
+  <section id="website-rating" class="card website-rating-card">
+    <h2>Rate and review the website</h2>
+    <p>Tell us how your experience with Mekenet Ekub has been.</p>
+    <form method="post" action="{{url_for('rate_website')}}">{{csrf_field()}}
+      <label for="website-rating-score">Your rating</label>
+      <select id="website-rating-score" name="rating" required>
+        {% for value in [5,4,3,2,1] %}<option value="{{value}}" {% if site_rating == value %}selected{% endif %}>{{value}} star{% if value != 1 %}s{% endif %}</option>{% endfor %}
+      </select>
+      <label for="website-rating-comment">Comment (optional)</label>
+      <textarea id="website-rating-comment" name="comment" maxlength="1000" rows="3" placeholder="What worked well? What could be better?">{{site_comment|default('')}}</textarea>
+      <button class="btn" type="submit">Submit rating</button>
+      {% if site_rating %}<small>Thank you. Your latest rating is {{site_rating}}/5.</small>{% endif %}
+    </form>
+  </section>
 </div>
+<style>.website-rating-card{margin-top:24px;padding:22px}.website-rating-card h2{margin:0 0 5px}.website-rating-card p{opacity:.7}.website-rating-card form{display:grid;gap:9px;max-width:540px}.website-rating-card textarea{font:inherit;padding:12px;border:1px solid var(--border,#d5ded8);border-radius:12px;background:var(--surface,#fff);color:inherit}.website-rating-card select{max-width:220px}</style>
 {% endblock %}
