@@ -6,6 +6,13 @@ import 'package:flutter/material.dart';
 const _agreementGreen = Color(0xFF88B44A);
 const _agreementSky = Color(0xFF43B5D4);
 
+class AgreementVideoCaptureResult {
+  const AgreementVideoCaptureResult(this.file, this.durationSeconds);
+
+  final XFile file;
+  final int durationSeconds;
+}
+
 class AgreementVideoCapturePage extends StatefulWidget {
   const AgreementVideoCapturePage({super.key});
 
@@ -22,6 +29,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
   bool _recording = false;
   bool _busy = false;
   int _seconds = 0;
+  int _recordedSeconds = 0;
   String? _error;
 
   @override
@@ -81,12 +89,13 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
         _recording = true;
         _busy = false;
         _seconds = 0;
+        _recordedSeconds = 0;
       });
       _durationTimer?.cancel();
       _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         setState(() => _seconds++);
-        if (_seconds >= 20) unawaited(_stopRecording());
+        if (_seconds >= 10) unawaited(_stopRecording());
       });
     } catch (error) {
       if (mounted) {
@@ -101,6 +110,11 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
   Future<void> _stopRecording() async {
     final camera = _camera;
     if (camera == null || !_recording || _busy) return;
+    if (_seconds < 5) {
+      setState(() => _error = 'Record for at least 5 seconds before stopping.');
+      return;
+    }
+    final recordedSeconds = _seconds.clamp(5, 10).toInt();
     _durationTimer?.cancel();
     _durationTimer = null;
     setState(() => _busy = true);
@@ -111,7 +125,8 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
           _recordedVideo = clip;
           _recording = false;
           _busy = false;
-          _seconds = 0;
+          _seconds = recordedSeconds;
+          _recordedSeconds = recordedSeconds;
           _error = null;
         });
       }
@@ -129,13 +144,15 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
   void _recordAgain() {
     setState(() {
       _recordedVideo = null;
+      _recordedSeconds = 0;
+      _seconds = 0;
       _error = null;
     });
   }
 
   void _useVideo() {
     final clip = _recordedVideo;
-    if (clip != null) Navigator.of(context).pop(clip);
+    if (clip != null) Navigator.of(context).pop(AgreementVideoCaptureResult(clip, _recordedSeconds));
   }
 
   Future<void> _cancel() async {
@@ -310,7 +327,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                   const Text('“በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡”'),
                   const SizedBox(height: 10),
                   Text(
-                    'Record here in the app. The separate live face check is not recorded. Maximum 20 seconds.',
+                    'Record here in the app. The separate live face check is not recorded. Minimum 5 seconds; it stops automatically at 10 seconds.',
                     style: TextStyle(
                       color: Colors.blueGrey.shade600,
                       fontSize: 12,
@@ -352,7 +369,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFD84A4A),
                         ),
-                        onPressed: _busy ? null : _stopRecording,
+                        onPressed: _busy || _seconds < 5 ? null : _stopRecording,
                         icon: const Icon(Icons.stop_rounded),
                         label: const Text('Stop recording'),
                       ),
