@@ -344,6 +344,7 @@ class ProfileController
             'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'liveness_verified' => ['required', 'accepted'],
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
+            'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
         ]);
         VideoDuration::assertAgreementLength($data['video_agreement']);
         $saved = [];

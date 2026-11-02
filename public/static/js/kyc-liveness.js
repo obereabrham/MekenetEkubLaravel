@@ -246,25 +246,35 @@
       preview.innerHTML = '';
       slot.classList.remove('missing');
       const file = input.files && input.files[0];
-      if (!file) return;
+      if (!file) { if (input === agreementInput) agreementDurationInput.value = ''; return; }
+      const capturedInPage = input === agreementInput && agreementGenerated;
+      if (capturedInPage) {
+        agreementGenerated = false;
+        agreementDurationInput.value = agreementDurationSeconds.toFixed(3);
+      }
       if (file.type.indexOf('image/') === 0 && file.size > 1024 * 1024) {
         input.value = '';
         slot.classList.add('missing');
-        preview.textContent = 'Images must be 1 MB or smaller.';
+        preview.textContent = 'Images must be 1 MB or smaller. Choose a smaller image.';
         return;
       }
+      if (input === agreementInput && !capturedInPage) agreementDurationInput.value = '';
       const url = URL.createObjectURL(file);
       let media;
       if (file.type.indexOf('image/') === 0) { media = document.createElement('img'); media.src = url; }
       else if (file.type.indexOf('video/') === 0) {
-        media = document.createElement('video'); media.src = url; media.controls = true; media.muted = true;
-        media.addEventListener('loadedmetadata', function () {
-          if (!Number.isFinite(media.duration) || media.duration < 5 || media.duration > 10.5) {
+        media = document.createElement('video'); media.src = url; media.controls = true; media.muted = true; media.preload = 'metadata';
+        if (input === agreementInput && !capturedInPage) media.addEventListener('loadedmetadata', function () {
+          const duration = media.duration;
+          if (!Number.isFinite(duration) || duration < 5 || duration > 10) {
             input.value = '';
+            agreementDurationInput.value = '';
             slot.classList.add('missing');
-            preview.textContent = 'Agreement video must be 5 to 10 seconds. Record it here and try again.';
-            URL.revokeObjectURL(url);
+            preview.textContent = 'The agreement video must be between 5 and 10 seconds.';
+            return;
           }
+          agreementDurationInput.value = duration.toFixed(3);
+          slot.classList.remove('missing');
         }, { once: true });
       }
       if (media) preview.appendChild(media);
@@ -281,9 +291,10 @@
   const startAgreementButton = document.getElementById('startAgreementRecording');
   const stopAgreementButton = document.getElementById('stopAgreementRecording');
   const useAgreementButton = document.getElementById('useAgreementRecording');
-  let agreementStream = null, agreementRecorder = null, agreementTimer = 0, agreementMinTimer = 0, agreementStartedAt = 0;
+  let agreementStream = null, agreementRecorder = null, agreementTimer = 0, agreementStartedAt = 0;
   let agreementChunks = [], agreementBlob = null, agreementObjectUrl = null;
-  let agreementCancelled = false;
+  let agreementCancelled = false, agreementDurationSeconds = 0, agreementClock = 0, agreementGenerated = false;
+  const agreementDurationInput = document.getElementById('videoDurationSeconds');
 
   function stopAgreementTracks() {
     if (agreementStream) agreementStream.getTracks().forEach(function (track) { track.stop(); });
@@ -292,9 +303,8 @@
   }
   function resetAgreementRecorder() {
     if (agreementTimer) clearTimeout(agreementTimer);
-    if (agreementMinTimer) clearTimeout(agreementMinTimer);
-    agreementTimer = 0;
-    agreementMinTimer = 0;
+    if (agreementClock) clearInterval(agreementClock);
+    agreementTimer = agreementClock = 0;
     agreementCancelled = true;
     if (agreementRecorder && agreementRecorder.state === 'recording') {
       try { agreementRecorder.stop(); } catch (_) {}
@@ -306,6 +316,9 @@
     agreementCancelled = false;
     agreementChunks = [];
     agreementBlob = null;
+    agreementDurationInput.value = '';
+    agreementDurationSeconds = 0;
+    agreementGenerated = false;
     agreementStatus.textContent = '';
     agreementPreview.removeAttribute('src');
     agreementPreview.controls = false;
@@ -345,7 +358,17 @@
       agreementRecorder.addEventListener('stop', function () {
         if (agreementCancelled) return;
         if (agreementTimer) clearTimeout(agreementTimer);
-        agreementTimer = 0;
+        if (agreementClock) clearInterval(agreementClock);
+        agreementTimer = agreementClock = 0;
+        agreementDurationSeconds = Math.min(10, (performance.now() - agreementStartedAt) / 1000);
+        if (agreementDurationSeconds < 5) {
+          stopAgreementTracks();
+          startAgreementButton.hidden = false;
+          startAgreementButton.disabled = false;
+          stopAgreementButton.hidden = true;
+          agreementStatus.textContent = 'Record for at least 5 seconds before stopping. Try again.';
+          return;
+        }
         agreementBlob = new Blob(agreementChunks, { type: agreementRecorder.mimeType || mimeType || 'video/webm' });
         stopAgreementTracks();
         if (!agreementBlob.size) {
@@ -365,18 +388,19 @@
         startAgreementButton.hidden = true;
         stopAgreementButton.hidden = true;
         useAgreementButton.hidden = false;
-        agreementStatus.textContent = 'Recording complete. Play it back, then use it or record again.';
+        agreementStatus.textContent = 'Recording complete (' + Math.round(agreementDurationSeconds) + ' seconds). Play it back, then use it or record again.';
       });
       agreementRecorder.start(250);
-      agreementStartedAt = Date.now();
+      agreementStartedAt = performance.now();
       startAgreementButton.hidden = true;
       stopAgreementButton.hidden = false;
       stopAgreementButton.disabled = true;
-      agreementStatus.textContent = 'Recording in this page… Keep recording for at least 5 seconds.';
-      agreementMinTimer = window.setTimeout(function () {
-        stopAgreementButton.disabled = false;
-        agreementStatus.textContent = 'You can stop now, or recording will stop automatically at 10 seconds.';
-      }, 5000);
+      agreementStatus.textContent = 'Record at least 5 seconds. It will stop automatically at 10 seconds.';
+      agreementClock = window.setInterval(function () {
+        const elapsed = (performance.now() - agreementStartedAt) / 1000;
+        stopAgreementButton.disabled = elapsed < 5;
+        if (elapsed >= 10 && agreementRecorder && agreementRecorder.state === 'recording') agreementRecorder.stop();
+      }, 200);
       agreementTimer = window.setTimeout(function () {
         if (agreementRecorder && agreementRecorder.state === 'recording') agreementRecorder.stop();
       }, 10000);
@@ -387,7 +411,12 @@
     }
   });
   stopAgreementButton.addEventListener('click', function () {
-    if (agreementRecorder && agreementRecorder.state === 'recording' && Date.now() - agreementStartedAt >= 5000) agreementRecorder.stop();
+    if (!agreementRecorder || agreementRecorder.state !== 'recording') return;
+    if ((performance.now() - agreementStartedAt) / 1000 < 5) {
+      agreementStatus.textContent = 'Record for at least 5 seconds before stopping.';
+      return;
+    }
+    agreementRecorder.stop();
   });
   useAgreementButton.addEventListener('click', function () {
     if (!agreementBlob) return;
@@ -397,6 +426,8 @@
       const transfer = new DataTransfer();
       transfer.items.add(file);
       agreementInput.files = transfer.files;
+      agreementGenerated = true;
+      agreementDurationInput.value = agreementDurationSeconds.toFixed(3);
       agreementInput.dispatchEvent(new Event('change', { bubbles: true }));
       agreementDialog.close();
       resetAgreementRecorder();
@@ -430,6 +461,13 @@
       return;
     }
     let firstMissing = null;
+    const uploadedDuration = Number(agreementDurationInput.value);
+    if (!Number.isFinite(uploadedDuration) || uploadedDuration < 5 || uploadedDuration > 10) {
+      event.preventDefault();
+      agreementStatus.textContent = 'Choose or record an agreement video between 5 and 10 seconds.';
+      document.getElementById('agreementVideoInput').closest('[data-slot]').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     document.querySelectorAll('[data-slot]').forEach(function (slot) {
       const input = slot.querySelector('input[type="file"]');
       if (slot.style.display === 'none' || input.disabled) return;

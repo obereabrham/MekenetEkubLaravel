@@ -262,6 +262,7 @@ class WebsiteController
     }
     private function imageUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null): ?string
     {
+        if ($file && $file->getSize() > 1024 * 1024) throw new \RuntimeException('Images must be 1 MB or smaller.');
         return $this->saveUpload($file, $folder, $base, ['png','jpg','jpeg','webp','gif']);
     }
     private function insertEkub(string $name, string $category, string $frequency, float $amount, int $duration, bool $isItem, array $images = [], ?int $recreatedFrom = null): int
@@ -521,6 +522,12 @@ class WebsiteController
                 $dob=trim((string)$request->input('dob'));
                 if(!preg_match('/^\d{4}-\d{2}-(\d{2})$/',$dob,$dobDay)||!checkdate((int)substr($dob,5,2),(int)$dobDay[1],(int)substr($dob,0,4))||(int)$dobDay[1]>30||$dob>=now()->toDateString()) throw new \RuntimeException('Enter a valid date of birth with a day from 01 to 30.');
                 if((string)$request->input('liveness_verified')!=='1') throw new \RuntimeException('Pass the in-page live face check before submitting.');
+                $rawDob=trim((string)$request->input('dob'));
+                $parsedDob=\DateTimeImmutable::createFromFormat('!Y-m-d',$rawDob);
+                $dobErrors=\DateTimeImmutable::getLastErrors();
+                if(!$parsedDob || ($dobErrors!==false && ($dobErrors['warning_count']>0 || $dobErrors['error_count']>0)) || $parsedDob->format('Y-m-d')!==$rawDob || $parsedDob>=new \DateTimeImmutable('today')) throw new \RuntimeException('Enter a valid date of birth before today.');
+                $videoDuration=$request->input('video_duration_seconds');
+                if(!is_numeric($videoDuration) || (float)$videoDuration<5 || (float)$videoDuration>10) throw new \RuntimeException('The agreement video must be between 5 and 10 seconds.');
                 $base=preg_replace('/\D/','',(string)$user['phone']);
                 $photo=$this->imageUpload($request->file('personal_photo'),'personal_photo',$name.'_'.$base.'_photo'); if($photo)$saved[]=$photo;
                 $front=$this->imageUpload($request->file('id_front'),'id_passport',$name.'_'.$base.($idType==='Passport'?'_passport':'_id-front')); if($front)$saved[]=$front;
@@ -530,7 +537,7 @@ class WebsiteController
                 if(!$front || ($idType==='National ID' && !$back)) throw new \RuntimeException($idType==='National ID'?'National ID requires both the front and back images.':'Passport requires one image.');
                 if(!$video) throw new \RuntimeException('Video agreement is required.');
                 VideoDuration::assertAgreementLength($request->file('video_agreement'));
-                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$dob,'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$video,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
+                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$parsedDob->format('Y-m-d'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$video,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
                 DB::table('users')->where('id',$user['id'])->update(['kyc_status'=>'pending']);
                 $this->flash('KYC submitted. Please wait for approval.','success'); return $this->go('kyc');
             } catch(Throwable $e) { foreach($saved as $file) app(UploadStorage::class)->delete($file); $this->flash($e->getMessage(),'error'); }
@@ -1162,7 +1169,7 @@ class WebsiteController
             if($state['error'])return ['error'=>$state['error']];
             $winnerIndex=random_int(0,count($state['members'])-1);$winner=$state['members'][$winnerIndex];
             $gross=(float)DB::table('payments')->where('ekub_id',$ekubId)->where('period_no',$periodNo)->where('status','approved')->sum('approved_amount');$fee=round($gross*0.02,2);$net=round($gross*0.98,2);
-            $payoutId=DB::table('payouts')->insertGetId(['ekub_id'=>$ekubId,'period_no'=>$periodNo,'winner_member_id'=>$winner['id'],'gross_amount'=>$gross,'service_fee'=>$fee,'net_amount'=>$net,'status'=>'pending','created_at'=>now(),'celebrated'=>0]);
+            $payoutId=DB::table('payouts')->insertGetId(['ekub_id'=>$ekubId,'period_no'=>$periodNo,'winner_member_id'=>$winner['id'],'gross_amount'=>$gross,'service_fee'=>$fee,'net_amount'=>$net,'status'=>'pending','created_at'=>now(),'celebrated'=>false]);
             if(!empty($ekub['merchant_id']))DB::table('merchant_commissions')->insert(['merchant_id'=>$ekub['merchant_id'],'ekub_id'=>$ekubId,'payout_id'=>$payoutId,'gross_amount'=>$gross,'amount'=>round($gross*0.005,2),'admin_amount'=>round($gross*0.015,2),'status'=>'pending','created_at'=>now()]);
             $next=min((int)$ekub['duration'],$periodNo+1);DB::table('ekubs')->where('id',$ekubId)->update(['current_period'=>$next]);
             if($next>$periodNo){DB::table('ekubs')->where('id',$ekubId)->update(['period_started_at'=>now()]);DB::table('period_dues')->updateOrInsert(['ekub_id'=>$ekubId,'period_no'=>$next],['started_at'=>now()]);}
