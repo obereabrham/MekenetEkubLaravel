@@ -117,7 +117,7 @@ class ProfileController
     public function updateProfilePicture(Request $request)
     {
         $data = $request->validate([
-            'profile_picture' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'profile_picture' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:1024'],
         ]);
         $user = $request->user();
         $oldPicture = $user->profile_picture;
@@ -335,11 +335,12 @@ class ProfileController
             'gender' => ['required', 'in:Male,Female,Other'],
             'id_type' => ['required', 'in:National ID,Passport'],
             'id_number' => ['required', 'string', 'max:80'],
-            'personal_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
-            'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
-            'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'personal_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
+            'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
+            'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'liveness_verified' => ['required', 'accepted'],
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
+            'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
         ]);
         $saved = [];
         try {
