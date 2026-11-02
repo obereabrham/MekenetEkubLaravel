@@ -194,11 +194,12 @@ class AuthController
 
         RateLimiter::hit($limitKey, 60);
 
-        $user = DB::table('users')
-            ->where('username', $login)
-            ->orWhere('phone', $login)
-            ->orWhere('email', mb_strtolower($login))
-            ->first();
+        $phone = $this->normalizedPhone($login);
+        $user = DB::table('users')->where(function ($query) use ($login, $phone): void {
+            $query->whereRaw('LOWER(username) = ?', [mb_strtolower($login)])
+                ->orWhereRaw('LOWER(email) = ?', [mb_strtolower($login)]);
+            if ($phone !== null) $query->orWhere('phone', $phone);
+        })->first();
 
         if (! $user || ! Hash::check($data['password'], (string) $user->password_hash)) {
             throw ValidationException::withMessages([

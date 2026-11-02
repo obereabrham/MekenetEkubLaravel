@@ -1,12 +1,15 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\MemberController;
+use App\Http\Controllers\Api\MerchantController;
 use App\Http\Controllers\Api\PaymentController;
 use App\Http\Controllers\Api\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('/analytics/visit', [AnalyticsController::class, 'visit'])->middleware('throttle:30,1');
     Route::prefix('auth')->group(function (): void {
         Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:6,1');
         Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:8,1');
@@ -43,6 +46,11 @@ Route::prefix('v1')->group(function (): void {
             ->whereIn('action', ['send-email-code', 'verify-email', 'start-authenticator', 'verify-authenticator', 'disable']);
         Route::post('/profile/password', [ProfileController::class, 'changePassword']);
         Route::post('/profile/account/delete', [ProfileController::class, 'deleteAccount']);
+        Route::get('/merchant', [MerchantController::class, 'dashboard']);
+        Route::post('/merchant/application', [MerchantController::class, 'apply']);
+        Route::post('/merchant/ekubs', [MerchantController::class, 'createEkub']);
+        Route::post('/merchant/requests/{requestId}/{action}', [MerchantController::class, 'decideJoin'])->whereNumber('requestId')->whereIn('action', ['approve', 'reject']);
+        Route::post('/merchant/ekubs/{ekubId}/ad', [MerchantController::class, 'saveAd'])->whereNumber('ekubId');
         Route::get('/ekubs', [MemberController::class, 'ekubs']);
         Route::get('/ekubs/{ekubId}', [MemberController::class, 'ekubDetail'])->whereNumber('ekubId');
         Route::post('/ekubs/{ekubId}/join', [MemberController::class, 'joinEkub'])->whereNumber('ekubId');

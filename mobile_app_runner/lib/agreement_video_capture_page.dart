@@ -22,6 +22,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
   bool _recording = false;
   bool _busy = false;
   int _seconds = 0;
+  int _recordedSeconds = 0;
   String? _error;
 
   @override
@@ -86,7 +87,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
       _durationTimer = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
         setState(() => _seconds++);
-        if (_seconds >= 20) unawaited(_stopRecording());
+        if (_seconds >= 10) unawaited(_stopRecording());
       });
     } catch (error) {
       if (mounted) {
@@ -101,6 +102,10 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
   Future<void> _stopRecording() async {
     final camera = _camera;
     if (camera == null || !_recording || _busy) return;
+    if (_seconds < 5) {
+      setState(() => _error = 'Record for at least 5 seconds before stopping.');
+      return;
+    }
     _durationTimer?.cancel();
     _durationTimer = null;
     setState(() => _busy = true);
@@ -109,9 +114,9 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
       if (mounted) {
         setState(() {
           _recordedVideo = clip;
+          _recordedSeconds = _seconds;
           _recording = false;
           _busy = false;
-          _seconds = 0;
           _error = null;
         });
       }
@@ -135,7 +140,9 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
 
   void _useVideo() {
     final clip = _recordedVideo;
-    if (clip != null) Navigator.of(context).pop(clip);
+    if (clip != null && _recordedSeconds >= 5 && _recordedSeconds <= 10) {
+      Navigator.of(context).pop(clip);
+    }
   }
 
   Future<void> _cancel() async {
@@ -310,7 +317,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                   const Text('“በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡”'),
                   const SizedBox(height: 10),
                   Text(
-                    'Record here in the app. The separate live face check is not recorded. Maximum 20 seconds.',
+                    'Record here in the app. The separate live face check is not recorded. Record for at least 5 seconds; recording stops at 10 seconds.',
                     style: TextStyle(
                       color: Colors.blueGrey.shade600,
                       fontSize: 12,
@@ -352,9 +359,9 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFD84A4A),
                         ),
-                        onPressed: _busy ? null : _stopRecording,
+                        onPressed: _busy || _seconds < 5 ? null : _stopRecording,
                         icon: const Icon(Icons.stop_rounded),
-                        label: const Text('Stop recording'),
+                        label: Text(_seconds < 5 ? 'Keep recording · ${5 - _seconds}s' : 'Stop recording'),
                       ),
                     )
                   else

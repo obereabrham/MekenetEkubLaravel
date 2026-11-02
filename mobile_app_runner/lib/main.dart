@@ -7,6 +7,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'app_lock.dart';
 import 'api.dart';
 import 'agreement_video_capture_page.dart';
 import 'liveness_capture_page.dart';
@@ -169,15 +170,22 @@ class MekenetApp extends StatefulWidget {
   State<MekenetApp> createState() => _MekenetAppState();
 }
 
-class _MekenetAppState extends State<MekenetApp> {
+class _MekenetAppState extends State<MekenetApp> with WidgetsBindingObserver {
   Map<String, dynamic>? user;
   bool loading = true;
   ThemeMode themeMode = ThemeMode.light;
   final themeStorage = const FlutterSecureStorage();
+  bool _appLockEnabled = false;
+  bool _appLocked = false;
+  String _appLockMethod = 'pin';
+  String _appLockSecret = '';
+  Future<void>? _appVisitRecording;
+  bool _appSessionRestored = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restore();
   }
 
@@ -186,6 +194,10 @@ class _MekenetAppState extends State<MekenetApp> {
       final savedTheme = await themeStorage.read(key: 'mekenet_theme_mode');
       if (savedTheme == 'light') themeMode = ThemeMode.light;
       if (savedTheme == 'dark') themeMode = ThemeMode.dark;
+      _appLockEnabled = await themeStorage.read(key: 'mekenet_app_lock_enabled') == 'true';
+      _appLockMethod = await themeStorage.read(key: 'mekenet_app_lock_method') ?? 'pin';
+      _appLockSecret = await themeStorage.read(key: 'mekenet_app_lock_secret') ?? '';
+      _appLocked = _appLockEnabled && _appLockSecret.isNotEmpty;
     } catch (_) {}
     if (await widget.api.hasToken()) {
       try {
@@ -198,7 +210,59 @@ class _MekenetAppState extends State<MekenetApp> {
         await widget.api.clearToken();
       }
     }
+    _appSessionRestored = true;
+    unawaited(_recordAppVisit());
     if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _recordAppVisit() async {
+    if (!_appSessionRestored) return;
+    if (_appVisitRecording != null) {
+      await _appVisitRecording;
+    }
+    if (!_appSessionRestored) return;
+    final request = _recordAppVisitOnce();
+    _appVisitRecording = request;
+    try {
+      await request;
+    } finally {
+      _appVisitRecording = null;
+    }
+  }
+
+  Future<void> _recordAppVisitOnce() async {
+    try {
+      var visitorId = await themeStorage.read(key: 'mekenet_analytics_visitor');
+      visitorId ??= List.generate(32, (_) => math.Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+      await themeStorage.write(key: 'mekenet_analytics_visitor', value: visitorId);
+      await widget.api.post('/analytics/visit', body: {'visitor_id': visitorId});
+    } catch (_) {}
+  }
+
+  Future<void> _refreshAppLock() async {
+    final enabled = await themeStorage.read(key: 'mekenet_app_lock_enabled') == 'true';
+    final method = await themeStorage.read(key: 'mekenet_app_lock_method') ?? 'pin';
+    final secret = await themeStorage.read(key: 'mekenet_app_lock_secret') ?? '';
+    if (!mounted) return;
+    setState(() {
+      _appLockEnabled = enabled && secret.isNotEmpty;
+      _appLockMethod = method;
+      _appLockSecret = secret;
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_recordAppVisit());
+    if ((state == AppLifecycleState.inactive || state == AppLifecycleState.paused || state == AppLifecycleState.hidden) && _appLockEnabled && !_appLocked) {
+      setState(() => _appLocked = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _toggleTheme() async {
@@ -228,12 +292,27 @@ class _MekenetAppState extends State<MekenetApp> {
       theme: _makeTheme(Brightness.light),
       darkTheme: _makeTheme(Brightness.dark),
       themeMode: themeMode,
+      builder: (context, child) => Stack(
+        fit: StackFit.expand,
+        children: [
+          child ?? const SizedBox.shrink(),
+          if (_appLocked && _appLockEnabled)
+            AppLockGate(
+              method: _appLockMethod,
+              secret: _appLockSecret,
+              onUnlock: () => setState(() => _appLocked = false),
+            ),
+        ],
+      ),
       home: loading
           ? const _BrandedSplash()
           : user == null
           ? AuthPage(
               api: widget.api,
-              onSignedIn: (value) => setState(() => user = value),
+              onSignedIn: (value) {
+                setState(() => user = value);
+                unawaited(_recordAppVisit());
+              },
               isDark: themeMode == ThemeMode.dark,
               onToggleTheme: _toggleTheme,
             )
@@ -243,6 +322,7 @@ class _MekenetAppState extends State<MekenetApp> {
               onSignOut: _signOut,
               themeMode: themeMode,
               onToggleTheme: _toggleTheme,
+              onLockConfigured: _refreshAppLock,
             ),
     );
   }
@@ -1307,12 +1387,14 @@ class MemberPage extends StatefulWidget {
     required this.onSignOut,
     required this.themeMode,
     required this.onToggleTheme,
+    required this.onLockConfigured,
   });
   final ApiClient api;
   final Map<String, dynamic> user;
   final Future<void> Function() onSignOut;
   final ThemeMode themeMode;
   final Future<void> Function() onToggleTheme;
+  final Future<void> Function() onLockConfigured;
 
   @override
   State<MemberPage> createState() => _MemberPageState();
@@ -1581,6 +1663,7 @@ class _MemberPageState extends State<MemberPage> with WidgetsBindingObserver {
         onSignOut: widget.onSignOut,
         isDark: widget.themeMode == ThemeMode.dark,
         onToggleTheme: widget.onToggleTheme,
+        onLockConfigured: widget.onLockConfigured,
       ),
     ];
     return Scaffold(
@@ -4232,8 +4315,10 @@ class _EkubDetailsState extends State<EkubDetails> {
     final images = item['images'] as List? ?? [];
     final members = result!['members'] as List? ?? [];
     final winners = result!['winners'] as List? ?? [];
+    final merchantAd = _map(result!['merchant_ad']);
+    final joinRequestPending = result!['my_join_request'] == 'pending';
     final canJoin =
-        !joined && item['is_full'] != true && item['status'] == 'open';
+        !joined && !joinRequestPending && item['is_full'] != true && item['status'] == 'open';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ekub details')),
@@ -4321,6 +4406,19 @@ class _EkubDetailsState extends State<EkubDetails> {
                 'The potential payout is calculated after the 2% service fee. Actual payments must be confirmed by the site.',
             isError: false,
           ),
+          if (merchantAd.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('Merchant promotion', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+              const SizedBox(height: 8), Text((merchantAd['title'] ?? '').toString(), style: const TextStyle(fontWeight: FontWeight.w800)),
+              if ((merchantAd['body'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 5), child: Text(merchantAd['body'].toString())),
+              if (merchantAd['images'] is List && (merchantAd['images'] as List).isNotEmpty) ...[
+                const SizedBox(height: 10), SizedBox(height: 150, child: ListView.separated(scrollDirection: Axis.horizontal, itemCount: (merchantAd['images'] as List).length, separatorBuilder: (_, __) => const SizedBox(width: 8), itemBuilder: (context, index) => ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.network((merchantAd['images'] as List)[index].toString(), width: 210, fit: BoxFit.cover))))
+              ],
+              if ((merchantAd['location'] ?? '').toString().isNotEmpty) Padding(padding: const EdgeInsets.only(top: 7), child: Text('⌖ ${merchantAd['location']}')),
+              if ((merchantAd['website_url'] ?? '').toString().isNotEmpty) Align(alignment: Alignment.centerRight, child: TextButton.icon(onPressed: () => launchUrl(Uri.parse(merchantAd['website_url'].toString()), mode: LaunchMode.externalApplication), icon: const Icon(Icons.open_in_new_rounded), label: const Text('Visit website'))),
+            ]))),
+          ],
           if (joined) ...[
             const SizedBox(height: 10),
             _Message(
@@ -4355,6 +4453,8 @@ class _EkubDetailsState extends State<EkubDetails> {
                   : const Icon(Icons.person_add_alt_1),
               label: const Text('Join Ekub'),
             )
+          else if (joinRequestPending)
+            const FilledButton(onPressed: null, child: Text('Join request awaiting merchant approval'))
           else
             _Message(
               text: item['is_full'] == true
@@ -5862,12 +5962,14 @@ class ProfileView extends StatefulWidget {
     required this.onSignOut,
     required this.isDark,
     required this.onToggleTheme,
+    required this.onLockConfigured,
   });
   final ApiClient api;
   final Map<String, dynamic> user;
   final Future<void> Function() onSignOut;
   final bool isDark;
   final Future<void> Function() onToggleTheme;
+  final Future<void> Function() onLockConfigured;
 
   @override
   State<ProfileView> createState() => _ProfileViewState();
@@ -5890,6 +5992,17 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Future<void> _open(BuildContext context, String feature) async {
+    if (feature == 'rate_app') {
+      final store = Uri.parse('https://play.google.com/store/apps/details?id=et.mekenet.mekenet_mobile&showAllReviews=true');
+      if (!await launchUrl(store, mode: LaunchMode.externalApplication) && mounted) {
+        _snack(context, 'The Play Store could not be opened.');
+      }
+      return;
+    }
+    if (feature == 'app_lock') {
+      await Navigator.of(context).push<void>(MaterialPageRoute<void>(builder: (_) => AppLockSettingsPage(onChanged: widget.onLockConfigured)));
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ProfileFeaturePage(
@@ -6167,6 +6280,14 @@ class _ProfileViewState extends State<ProfileView> {
         _tileGrid(context, [
           _tile(
             context,
+            Icons.storefront_outlined,
+            'Merchant account',
+            'Apply for a merchant dashboard',
+            'merchant',
+            iconColor: sky,
+          ),
+          _tile(
+            context,
             Icons.account_balance_wallet_outlined,
             'Payment methods',
             'Manage payout accounts',
@@ -6186,6 +6307,13 @@ class _ProfileViewState extends State<ProfileView> {
             'Email codes and authenticator app',
             'security',
             iconColor: blue,
+          ),
+          _tile(
+            context,
+            Icons.lock_person_outlined,
+            'App lock',
+            'Protect the app with a PIN or pattern',
+            'app_lock',
           ),
           _tile(
             context,
@@ -6223,6 +6351,14 @@ class _ProfileViewState extends State<ProfileView> {
         const SizedBox(height: 18),
         _sectionTitle(context, 'About & support'),
         _tileGrid(context, [
+          _tile(
+            context,
+            Icons.star_rate_rounded,
+            'Rate and review the app',
+            'Give stars and write a review on Google Play',
+            'rate_app',
+            iconColor: const Color(0xFFFFB82E),
+          ),
           _tile(
             context,
             Icons.info_outline,
@@ -6299,6 +6435,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   Map<String, dynamic> result = {};
   List<dynamic> rows = [];
   List<String> banks = [], categories = [], frequencies = [];
+  List<String> businessCategories = [], merchantEkubCategories = [];
   String? bank,
       category,
       frequency,
@@ -6306,6 +6443,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       gender = 'Male',
       reason = 'I no longer need the service';
   XFile? photo, front, back, video, profilePicture;
+  List<XFile> merchantAdImages = [];
+  int? merchantAdEkubId;
   bool livenessPassed = false;
   bool loading = true, busy = false, emailCodeSent = false;
   bool emailChangeCodeSent = false;
@@ -6381,6 +6520,12 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
             ).text = (verification['full_name'] ?? field('full_name').text)
                 .toString();
             field('dob').text = (verification['dob'] ?? '').toString();
+            final parsedDob = DateTime.tryParse(field('dob').text);
+            if (parsedDob != null) {
+              field('dob_year').text = parsedDob.year.toString().padLeft(4, '0');
+              field('dob_month').text = parsedDob.month.toString().padLeft(2, '0');
+              field('dob_day').text = parsedDob.day.toString().padLeft(2, '0');
+            }
             field('id_number').text = (verification['id_number'] ?? '')
                 .toString();
             gender = (verification['gender'] ?? gender).toString();
@@ -6388,11 +6533,130 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
           }
         case 'security':
           result = await widget.api.get('/profile/security');
+        case 'merchant':
+          result = await widget.api.get('/merchant');
+          rows = result['ekubs'] as List? ?? [];
+          businessCategories = (result['business_categories'] as List? ?? []).map((e) => e.toString()).toList();
+          merchantEkubCategories = (result['ekub_categories'] as List? ?? []).map((e) => e.toString()).toList();
+          frequencies = (result['frequencies'] as List? ?? []).map((e) => e.toString()).toList();
+          category ??= merchantEkubCategories.isEmpty ? null : merchantEkubCategories.first;
+          frequency ??= frequencies.isEmpty ? null : frequencies.first;
+          if (rows.isNotEmpty) {
+            if (!rows.any((e) => _int(_map(e)['id']) == merchantAdEkubId)) merchantAdEkubId = _int(_map(rows.first)['id']);
+            final selectedEkub = _map(rows.firstWhere((e) => _int(_map(e)['id']) == merchantAdEkubId));
+            final savedAd = _map(selectedEkub['ad']);
+            for (final entry in const {'merchant_ad_title': 'title', 'merchant_ad_body': 'body', 'merchant_ad_website': 'website_url', 'merchant_ad_location': 'location'}.entries) {
+              field(entry.key).text = (savedAd[entry.value] ?? '').toString();
+            }
+          }
+          businessCategory ??= businessCategories.isEmpty ? null : businessCategories.first;
+          final application = _map(result['application']);
+          for (final key in ['business_name', 'tin', 'business_phone', 'address', 'website', 'location']) {
+            field(key).text = (application[key] ?? '').toString();
+          }
+          final appStatus = (result['status'] ?? '').toString();
+          if (appStatus == 'pending' || appStatus == 'rejected') result['application_status'] = appStatus;
       }
     } on ApiException catch (e) {
       result['error'] = e.message;
     }
     if (mounted) setState(() => loading = false);
+  }
+
+  String? businessCategory;
+
+  Future<void> _merchantApply() async {
+    if (!form.currentState!.validate()) return;
+    final sent = await _post('/merchant/application', {
+      'business_name': field('business_name').text.trim(),
+      'tin': field('tin').text.trim(),
+      'category': businessCategory,
+      'business_phone': field('business_phone').text.trim(),
+      'address': field('address').text.trim(),
+      'website': field('website').text.trim(),
+      'location': field('location').text.trim(),
+    });
+    if (sent) {
+      await _load();
+    }
+  }
+
+  Future<void> _merchantCreateEkub() async {
+    if (!form.currentState!.validate()) return;
+    final created = await _post('/merchant/ekubs', {
+      'name': field('merchant_ekub_name').text.trim(),
+      'category': category,
+      'frequency': frequency,
+      'base_amount': double.tryParse(field('merchant_amount').text) ?? 0,
+      'duration': int.tryParse(field('merchant_duration').text) ?? 0,
+    });
+    if (created) {
+      field('merchant_ekub_name').clear();
+      field('merchant_amount').clear();
+      field('merchant_duration').clear();
+    }
+  }
+
+  Future<void> _merchantJoinDecision(int requestId, String action) async {
+    await _post('/merchant/requests/$requestId/$action', const {});
+  }
+
+  void _selectMerchantAd(int? ekubId) {
+    if (ekubId == null) return;
+    final selected = rows.map(_map).firstWhere((row) => _int(row['id']) == ekubId, orElse: () => <String, dynamic>{});
+    final savedAd = _map(selected['ad']);
+    setState(() {
+      merchantAdEkubId = ekubId;
+      field('merchant_ad_title').text = (savedAd['title'] ?? '').toString();
+      field('merchant_ad_body').text = (savedAd['body'] ?? '').toString();
+      field('merchant_ad_website').text = (savedAd['website_url'] ?? '').toString();
+      field('merchant_ad_location').text = (savedAd['location'] ?? '').toString();
+      merchantAdImages.clear();
+    });
+  }
+
+  Future<void> _pickMerchantAdImages() async {
+    final picked = await picker.pickMultiImage(imageQuality: 88);
+    if (!mounted || picked.isEmpty) return;
+    final images = picked.take(3).toList();
+    for (final image in images) {
+      if (await image.length() > 1024 * 1024) {
+        _snack(context, 'Each ad image must be 1 MB or smaller. Choose smaller images.');
+        return;
+      }
+    }
+    setState(() => merchantAdImages = images);
+  }
+
+  Future<void> _saveMerchantAd(int ekubId) async {
+    if (field('merchant_ad_title').text.trim().isEmpty) {
+      _snack(context, 'Enter a title for this promotion.');
+      return;
+    }
+    final files = <String, String>{};
+    for (var i = 0; i < merchantAdImages.length && i < 3; i++) {
+      files['image_${i + 1}'] = merchantAdImages[i].path;
+    }
+    setState(() => busy = true);
+    try {
+      final response = await widget.api.postFiles(
+        '/merchant/ekubs/$ekubId/ad',
+        fields: {
+          'title': field('merchant_ad_title').text.trim(),
+          'body': field('merchant_ad_body').text.trim(),
+          'website_url': field('merchant_ad_website').text.trim(),
+          'location': field('merchant_ad_location').text.trim(),
+        },
+        files: files,
+      );
+      if (mounted) _snack(context, response['message']?.toString() ?? 'Promotion saved.');
+      merchantAdImages.clear();
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) _snack(context, e.message);
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<bool> _post(
@@ -6555,6 +6819,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       return;
     }
     if (file == null || !mounted) return;
+    if (await file.length() > 1024 * 1024) {
+      _snack(context, 'Images must be 1 MB or smaller. Choose a smaller image.');
+      return;
+    }
     setState(() {
       if (key == 'photo') photo = file;
       if (key == 'front') front = file;
@@ -6652,6 +6920,36 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     }
   }
 
+  DateTime? _dobDate() {
+    final yearText = field('dob_year').text.trim();
+    final monthText = field('dob_month').text.trim();
+    final dayText = field('dob_day').text.trim();
+    if (yearText.length != 4 || monthText.length != 2 || dayText.length != 2) return null;
+    final year = int.tryParse(yearText), month = int.tryParse(monthText), day = int.tryParse(dayText);
+    if (year == null || month == null || day == null || year < 1900 || year >= DateTime.now().year || month < 1 || month > 12 || day < 1 || day > 30) return null;
+    final maxDay = math.min(30, DateUtils.getDaysInMonth(year, month));
+    if (day > maxDay) return null;
+    return DateTime(year, month, day);
+  }
+
+  Future<void> _pickDob() async {
+    final initial = _dobDate() ?? DateTime(DateTime.now().year - 18, 1, 1);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900),
+      lastDate: DateTime.now().subtract(const Duration(days: 1)),
+      selectableDayPredicate: (date) => date.day <= 30,
+      helpText: 'Select date of birth',
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      field('dob_year').text = picked.year.toString().padLeft(4, '0');
+      field('dob_month').text = picked.month.toString().padLeft(2, '0');
+      field('dob_day').text = picked.day.toString().padLeft(2, '0');
+    });
+  }
+
   Future<void> _submitKyc() async {
     if (!form.currentState!.validate()) return;
     if (photo == null ||
@@ -6671,7 +6969,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         '/profile/kyc',
         fields: {
           'full_name': field('full_name').text.trim(),
-          'dob': field('dob').text.trim(),
+          'dob': _dobDate()!.toIso8601String().substring(0, 10),
           'gender': gender!,
           'id_type': idType!,
           'id_number': field('id_number').text.trim(),
@@ -7514,6 +7812,83 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
             }),
           ],
         );
+      case 'merchant':
+        final merchantStatus = (result['status'] ?? 'not_applied').toString();
+        final application = _map(result['application']);
+        final approved = merchantStatus == 'approved';
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              color: approved ? green.withAlpha(18) : sky.withAlpha(18),
+              child: ListTile(
+                leading: Icon(approved ? Icons.verified_outlined : Icons.storefront_outlined, color: approved ? green : sky),
+                title: Text(approved ? 'Merchant approved' : merchantStatus == 'pending' ? 'Merchant application under review' : merchantStatus == 'rejected' ? 'Application needs changes' : 'Apply for a merchant account', style: const TextStyle(fontWeight: FontWeight.w900)),
+                subtitle: Text((application['rejection_reason'] ?? (approved ? 'Create Ekubs and manage your invited members and promotions.' : merchantStatus == 'pending' ? 'Admin is checking your business information.' : merchantStatus == 'rejected' ? 'Update your details and submit again.' : 'Admin will verify your TIN and business details.')).toString()),
+              ),
+            ),
+            if (!approved) ...[
+              const SizedBox(height: 12),
+              Card(child: Padding(padding: const EdgeInsets.all(14), child: Form(key: form, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                TextFormField(controller: field('business_name'), decoration: const InputDecoration(labelText: 'Business name'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the business name.' : null),
+                const SizedBox(height: 9), TextFormField(controller: field('tin'), decoration: const InputDecoration(labelText: 'TIN'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the business TIN.' : null),
+                const SizedBox(height: 9), DropdownButtonFormField<String>(value: businessCategory, isExpanded: true, decoration: const InputDecoration(labelText: 'Category'), items: businessCategories.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => businessCategory = v)),
+                const SizedBox(height: 9), TextFormField(controller: field('business_phone'), keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Business phone'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a business phone.' : null),
+                const SizedBox(height: 9), TextFormField(controller: field('address'), decoration: const InputDecoration(labelText: 'Address'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter a business address.' : null),
+                const SizedBox(height: 9), TextFormField(controller: field('website'), keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Website (optional)')),
+                const SizedBox(height: 9), TextFormField(controller: field('location'), decoration: const InputDecoration(labelText: 'Location or map link')),
+                const SizedBox(height: 12), FilledButton(onPressed: busy ? null : _merchantApply, child: const Text('Submit merchant application')),
+              ])))),
+            ],
+            if (approved) ...[
+              const SizedBox(height: 12),
+              Row(children: [Expanded(child: _MerchantStat(title: 'Total commission', value: '${_money(result['commission_total'])} ETB')), const SizedBox(width: 9), Expanded(child: _MerchantStat(title: 'Pending commission', value: '${_money(result['commission_pending'])} ETB'))]),
+              const SizedBox(height: 12),
+              Card(child: Padding(padding: const EdgeInsets.all(14), child: Form(key: form, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                const Text('Create a merchant Ekub', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                const SizedBox(height: 5), Text('People need your invite code and your approval to join. Admin keeps control of payments and identity verification.', style: TextStyle(color: context.palette.muted)),
+                const SizedBox(height: 10), TextFormField(controller: field('merchant_ekub_name'), decoration: const InputDecoration(labelText: 'Ekub name'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter an Ekub name.' : null),
+                const SizedBox(height: 9), DropdownButtonFormField<String>(value: merchantEkubCategories.contains(category) ? category : (merchantEkubCategories.isNotEmpty ? merchantEkubCategories.first : null), isExpanded: true, decoration: const InputDecoration(labelText: 'Ekub category'), items: merchantEkubCategories.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => category = v)),
+                const SizedBox(height: 9), DropdownButtonFormField<String>(value: frequencies.contains(frequency) ? frequency : (frequencies.isNotEmpty ? frequencies.first : null), isExpanded: true, decoration: const InputDecoration(labelText: 'Contribution frequency'), items: frequencies.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(), onChanged: (v) => setState(() => frequency = v)),
+                const SizedBox(height: 9), TextFormField(controller: field('merchant_amount'), keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Contribution per period (ETB)'), validator: (v) => (double.tryParse(v ?? '') ?? 0) <= 0 ? 'Enter a positive amount.' : null),
+                const SizedBox(height: 9), TextFormField(controller: field('merchant_duration'), keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Number of periods'), validator: (v) => (int.tryParse(v ?? '') ?? 1) < 2 ? 'Enter at least 2 periods.' : null),
+                const SizedBox(height: 11), FilledButton(onPressed: busy ? null : _merchantCreateEkub, child: const Text('Create Ekub')),
+              ])))),
+              const SizedBox(height: 14), Text('Your Ekubs', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+              if (rows.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: _Empty(text: 'No merchant Ekubs yet.'))),
+              ...rows.map((value) {
+                final ekub = _map(value);
+                final requests = (ekub['join_requests'] as List? ?? const []).map(_map).toList();
+                final members = (ekub['members'] as List? ?? const []).map(_map).toList();
+                return Card(margin: const EdgeInsets.only(top: 10), child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  Row(children: [const Icon(Icons.savings_outlined, color: green), const SizedBox(width: 8), Expanded(child: Text((ekub['name'] ?? 'Ekub').toString(), style: const TextStyle(fontWeight: FontWeight.w900))), Chip(label: Text((ekub['invite_code'] ?? '').toString()))]),
+                  Text('${_money(ekub['base_amount'])} ETB · ${ekub['frequency'] ?? ''} · ${ekub['duration'] ?? ''} periods · ${ekub['member_count'] ?? members.length} members', style: TextStyle(color: context.palette.muted)),
+                  if (requests.isNotEmpty) ...[
+                    const SizedBox(height: 10), const Text('Join requests waiting for you', style: TextStyle(fontWeight: FontWeight.w900)),
+                    ...requests.map((r) => ListTile(contentPadding: EdgeInsets.zero, title: Text('${r['first_name'] ?? ''} ${r['last_name'] ?? ''} · @${r['username'] ?? ''}'), subtitle: Text('${r['phone'] ?? ''} · KYC ${r['kyc_status'] ?? ''} · ${r['share_type'] ?? ''} share'), trailing: Wrap(children: [IconButton(tooltip: 'Approve', onPressed: busy ? null : () => _merchantJoinDecision(_int(r['id']), 'approve'), icon: const Icon(Icons.check_circle_outline, color: green)), IconButton(tooltip: 'Reject', onPressed: busy ? null : () => _merchantJoinDecision(_int(r['id']), 'reject'), icon: const Icon(Icons.cancel_outlined, color: Colors.redAccent))]))),
+                  ],
+                  ExpansionTile(title: Text('Member details · ${members.length}'), children: members.map((m) => ListTile(dense: true, contentPadding: EdgeInsets.zero, title: Text('${m['first_name'] ?? ''} ${m['last_name'] ?? ''} · @${m['username'] ?? ''}'), subtitle: Text('${m['phone'] ?? ''} · KYC ${m['kyc_status'] ?? ''} · ${m['contribution_amount'] ?? ''} ETB'))).toList()),
+                ])));
+              }),
+              if (rows.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                  const Text('Promotion for an Ekub', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                  const SizedBox(height: 9), DropdownButtonFormField<int>(value: rows.any((e) => _int(_map(e)['id']) == merchantAdEkubId) ? merchantAdEkubId : _int(_map(rows.first)['id']), isExpanded: true, decoration: const InputDecoration(labelText: 'Merchant Ekub'), items: rows.map((e) => _map(e)).map((e) => DropdownMenuItem(value: _int(e['id']), child: Text((e['name'] ?? 'Ekub').toString(), overflow: TextOverflow.ellipsis))).toList(), onChanged: _selectMerchantAd),
+                  const SizedBox(height: 9), TextField(controller: field('merchant_ad_title'), decoration: const InputDecoration(labelText: 'Ad title')),
+                  const SizedBox(height: 9), TextField(controller: field('merchant_ad_body'), maxLines: 3, decoration: const InputDecoration(labelText: 'Text')),
+                  const SizedBox(height: 9), TextField(controller: field('merchant_ad_website'), keyboardType: TextInputType.url, decoration: const InputDecoration(labelText: 'Website link')),
+                  const SizedBox(height: 9), TextField(controller: field('merchant_ad_location'), decoration: const InputDecoration(labelText: 'Location')),
+                  const SizedBox(height: 9), OutlinedButton.icon(onPressed: busy ? null : _pickMerchantAdImages, icon: const Icon(Icons.add_photo_alternate_outlined), label: Text(merchantAdImages.isEmpty ? 'Choose up to 3 images · 1 MB each' : '${merchantAdImages.length} images selected')),
+                  if (merchantAdImages.isNotEmpty) Text(merchantAdImages.map((x) => x.name).join(' · '), style: TextStyle(color: context.palette.muted)),
+                  const SizedBox(height: 9), FilledButton(onPressed: busy || merchantAdEkubId == null ? null : () => _saveMerchantAd(merchantAdEkubId!), child: const Text('Save Ekub promotion')),
+                ]))),
+              ],
+              const SizedBox(height: 14), Text('Commission history', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+              ...((result['commissions'] as List? ?? const []).map(_map).map((c) => Card(child: ListTile(leading: const Icon(Icons.payments_outlined, color: green), title: Text('Ekub #${c['ekub_id']} · ${_money(c['amount'])} ETB'), subtitle: Text('Your 0.5% commission · platform 1.5%: ${_money(c['admin_amount'])} ETB · ${c['status']}'))))),
+            ],
+          ],
+        );
       case 'full_ekubs':
         final darkTheme = Theme.of(context).brightness == Brightness.dark;
         return rows.isEmpty
@@ -7830,16 +8205,41 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                               : null,
                         ),
                         const SizedBox(height: 10),
-                        TextFormField(
-                          controller: field('dob'),
-                          keyboardType: TextInputType.datetime,
-                          decoration: const InputDecoration(
-                            labelText: 'Date of birth (YYYY-MM-DD)',
-                            prefixIcon: Icon(Icons.calendar_today_outlined),
-                          ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Enter your date of birth.'
-                              : null,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: TextFormField(
+                              controller: field('dob_year'),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              maxLength: 4,
+                              decoration: const InputDecoration(labelText: 'Year', counterText: ''),
+                              validator: (_) => _dobDate() == null ? 'Use YYYY' : null,
+                            )),
+                            const SizedBox(width: 8),
+                            Expanded(child: TextFormField(
+                              controller: field('dob_month'),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              maxLength: 2,
+                              decoration: const InputDecoration(labelText: 'Month', counterText: ''),
+                              validator: (_) => _dobDate() == null ? '01–12' : null,
+                            )),
+                            const SizedBox(width: 8),
+                            Expanded(child: TextFormField(
+                              controller: field('dob_day'),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              maxLength: 2,
+                              decoration: const InputDecoration(labelText: 'Day', counterText: ''),
+                              validator: (_) => _dobDate() == null ? '01–30' : null,
+                            )),
+                            IconButton(
+                              tooltip: 'Choose date from calendar',
+                              onPressed: _pickDob,
+                              icon: const Icon(Icons.calendar_month_rounded, color: green),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
@@ -8899,11 +9299,29 @@ Future<bool> _joinEkub(
     ),
   );
   if (share == null || !context.mounted) return false;
-  try {
-    await api.post(
-      '/ekubs/' + _int(item['id']).toString() + '/join',
-      body: {'share_type': share},
+  String? inviteCode;
+  if (item['is_merchant_ekub'] == true) {
+    final inviteController = TextEditingController();
+    inviteCode = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Merchant invite code'),
+        content: TextField(controller: inviteController, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Enter the code shared with you')),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, inviteController.text.trim().toUpperCase()), child: const Text('Continue')),
+        ],
+      ),
     );
+    inviteController.dispose();
+    if (inviteCode == null || inviteCode.isEmpty || !context.mounted) return false;
+  }
+  try {
+    final response = await api.post(
+      '/ekubs/' + _int(item['id']).toString() + '/join',
+      body: {'share_type': share, if (inviteCode != null) 'invite_code': inviteCode},
+    );
+    final pending = response['status'] == 'pending';
     if (context.mounted) {
       await showDialog<void>(
         context: context,
@@ -8931,13 +9349,15 @@ Future<bool> _joinEkub(
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'You’re in!',
+                Text(
+                  pending ? 'Request sent' : 'You’re in!',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 7),
                 Text(
-                  'You joined ${(item['name'] ?? 'this Ekub').toString()} with a ${share.toUpperCase()} share.',
+                  pending
+                      ? 'Your request to join ${(item['name'] ?? 'this Ekub').toString()} is waiting for merchant approval. You will be added after approval.'
+                      : 'You joined ${(item['name'] ?? 'this Ekub').toString()} with a ${share.toUpperCase()} share.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.palette.muted, height: 1.4),
                 ),
@@ -9298,6 +9718,27 @@ class _ImageBox extends StatelessWidget {
           'assets/images/mekenet-ekub-logo.png',
           fit: BoxFit.cover,
         ),
+      ),
+    ),
+  );
+}
+
+class _MerchantStat extends StatelessWidget {
+  const _MerchantStat({required this.title, required this.value});
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: context.palette.muted, fontSize: 12)),
+          const SizedBox(height: 6),
+          Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: green)),
+        ],
       ),
     ),
   );

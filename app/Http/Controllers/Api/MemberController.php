@@ -164,6 +164,8 @@ class MemberController
 
         return response()->json([
             'ekub' => $payload,
+            'merchant_ad' => $row->merchant_id ? $this->merchantAd($ekubId) : null,
+            'my_join_request' => $row->merchant_id ? DB::table('merchant_join_requests')->where('ekub_id', $ekubId)->where('user_id', $userId)->value('status') : null,
             'membership' => $membership ? [
                 'id' => (int) $membership->id,
                 'share_type' => $membership->share_type,
@@ -188,6 +190,7 @@ class MemberController
     {
         $data = $request->validate([
             'share_type' => ['required', 'in:full,half,quarter'],
+            'invite_code' => ['nullable', 'string', 'max:20'],
         ]);
         $user = $request->user();
 
@@ -199,6 +202,24 @@ class MemberController
         }
 
         $shareType = $data['share_type'];
+        $ekubForJoin = DB::table('ekubs')->where('id', $ekubId)->first();
+        if ($ekubForJoin && $ekubForJoin->merchant_id) {
+            if ($ekubForJoin->status !== 'open') return response()->json(['message' => 'This Ekub is not accepting members.'], 422);
+            if ((bool) $ekubForJoin->is_item && $shareType !== 'full') return response()->json(['message' => 'Item Ekubs only allow a full share.'], 422);
+            if (DB::table('ekub_members')->where('ekub_id', $ekubId)->where('user_id', $user->id)->exists()) return response()->json(['message' => 'You already joined this Ekub.'], 422);
+            $requestedFraction = match ($shareType) { 'full' => 1.0, 'half' => 0.5, 'quarter' => 0.25 };
+            $usedCapacity = (float) DB::table('ekub_members')->where('ekub_id', $ekubId)->sum('share_fraction');
+            if ($usedCapacity + $requestedFraction > (float) $ekubForJoin->duration + 0.000001) return response()->json(['message' => 'This Ekub is full or does not have enough capacity for that share.'], 422);
+            if (! filled($data['invite_code'] ?? null) || ! hash_equals((string) $ekubForJoin->invite_code, strtoupper(trim((string) $data['invite_code'])))) {
+                return response()->json(['message' => 'Enter the invite code shared by this merchant.'], 422);
+            }
+            $alreadyRequested = DB::table('merchant_join_requests')->where('ekub_id', $ekubId)->where('user_id', $user->id)->first();
+            if ($alreadyRequested && $alreadyRequested->status === 'pending') return response()->json(['message' => 'Your join request is waiting for merchant approval.'], 202);
+            DB::table('merchant_join_requests')->updateOrInsert(['ekub_id' => $ekubId, 'user_id' => $user->id], [
+                'merchant_id' => $ekubForJoin->merchant_id, 'share_type' => $shareType, 'status' => 'pending', 'created_at' => now(), 'reviewed_at' => null,
+            ]);
+            return response()->json(['message' => 'Join request sent. The merchant must approve it before you are added.', 'status' => 'pending'], 202);
+        }
 
         try {
             $membershipId = DB::transaction(function () use ($ekubId, $user, $shareType): int {
@@ -425,6 +446,7 @@ class MemberController
             'duration' => (int) $ekub['duration'],
             'status' => $ekub['status'],
             'is_item' => (bool) $ekub['is_item'],
+            'is_merchant_ekub' => ! empty($ekub['merchant_id']),
             'current_period' => (int) $ekub['current_period'],
             'member_count' => (int) $memberCount,
             'used_capacity' => round((float) $used, 2),
@@ -435,6 +457,15 @@ class MemberController
             'images' => array_map(fn ($path) => app(UploadStorage::class)->url((string) $path), $images),
             'starts_at' => $ekub['start_at'] ?? null,
         ];
+    }
+
+    private function merchantAd(int $ekubId): ?array
+    {
+        $ad = DB::table('merchant_ekub_ads')->where('ekub_id', $ekubId)->first();
+        if (! $ad) return null;
+        $data = (array) $ad;
+        $data['images'] = array_map(fn ($path) => app(UploadStorage::class)->url((string) $path), json_decode((string) $ad->images, true) ?: []);
+        return $data;
     }
 }
 

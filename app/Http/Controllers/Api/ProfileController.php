@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Support\BrandedEmail;
 use App\Support\UploadStorage;
+use App\Support\VideoDuration;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -117,7 +118,7 @@ class ProfileController
     public function updateProfilePicture(Request $request)
     {
         $data = $request->validate([
-            'profile_picture' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
+            'profile_picture' => ['required', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:1024'],
         ]);
         $user = $request->user();
         $oldPicture = $user->profile_picture;
@@ -317,18 +318,34 @@ class ProfileController
         }
         if ($user->kyc_status === 'approved') return response()->json(['message' => 'Your identity has already been verified.'], 422);
 
+        // Mobile clients may send day/month dates from their locale's date input.
+        // Normalize supported entry formats before validating and persisting ISO dates.
+        $rawDob = trim((string) $request->input('dob'));
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'd.m.Y', 'Y/m/d', 'Y-n-j', 'j/n/Y', 'j-n-Y'] as $dobFormat) {
+            $parsedDob = \DateTimeImmutable::createFromFormat('!'.$dobFormat, $rawDob);
+            $dateErrors = \DateTimeImmutable::getLastErrors();
+            if ($parsedDob && ($dateErrors === false || ($dateErrors['warning_count'] === 0 && $dateErrors['error_count'] === 0)) && $parsedDob->format($dobFormat) === $rawDob) {
+                $request->merge(['dob' => $parsedDob->format('Y-m-d')]);
+                break;
+            }
+        }
+        if (preg_match('/^\d{4}-\d{2}-(\d{2})$/', (string) $request->input('dob'), $dayMatch) && (int) $dayMatch[1] > 30) {
+            throw ValidationException::withMessages(['dob' => ['Choose a day from 01 to 30.']]);
+        }
+
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:160'],
-            'dob' => ['required', 'date', 'before:today'],
+            'dob' => ['required', 'date_format:Y-m-d', 'before:today'],
             'gender' => ['required', 'in:Male,Female,Other'],
             'id_type' => ['required', 'in:National ID,Passport'],
             'id_number' => ['required', 'string', 'max:80'],
-            'personal_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
-            'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
-            'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
+            'personal_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
+            'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
+            'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'liveness_verified' => ['required', 'accepted'],
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
         ]);
+        VideoDuration::assertAgreementLength($data['video_agreement']);
         $saved = [];
         try {
             $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'));

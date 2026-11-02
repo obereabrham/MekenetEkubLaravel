@@ -81,7 +81,7 @@ class PaymentController
             'amount' => ['required', 'numeric', 'min:0.01', 'max:'.(float) $balance['can_submit']],
             'method' => ['required', 'string', 'in:'.implode(',', $allowedMethods)],
             'transaction_no' => ['required', 'string', 'max:191'],
-            'screenshot' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:8192'],
+            'screenshot' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'terms_accepted' => ['accepted'],
         ]);
 

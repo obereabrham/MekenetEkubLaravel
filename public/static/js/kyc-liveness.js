@@ -247,10 +247,26 @@
       slot.classList.remove('missing');
       const file = input.files && input.files[0];
       if (!file) return;
+      if (file.type.indexOf('image/') === 0 && file.size > 1024 * 1024) {
+        input.value = '';
+        slot.classList.add('missing');
+        preview.textContent = 'Images must be 1 MB or smaller.';
+        return;
+      }
       const url = URL.createObjectURL(file);
       let media;
       if (file.type.indexOf('image/') === 0) { media = document.createElement('img'); media.src = url; }
-      else if (file.type.indexOf('video/') === 0) { media = document.createElement('video'); media.src = url; media.controls = true; media.muted = true; }
+      else if (file.type.indexOf('video/') === 0) {
+        media = document.createElement('video'); media.src = url; media.controls = true; media.muted = true;
+        media.addEventListener('loadedmetadata', function () {
+          if (!Number.isFinite(media.duration) || media.duration < 5 || media.duration > 10.5) {
+            input.value = '';
+            slot.classList.add('missing');
+            preview.textContent = 'Agreement video must be 5 to 10 seconds. Record it here and try again.';
+            URL.revokeObjectURL(url);
+          }
+        }, { once: true });
+      }
       if (media) preview.appendChild(media);
       const label = document.createElement('span');
       label.textContent = file.name;
@@ -265,7 +281,7 @@
   const startAgreementButton = document.getElementById('startAgreementRecording');
   const stopAgreementButton = document.getElementById('stopAgreementRecording');
   const useAgreementButton = document.getElementById('useAgreementRecording');
-  let agreementStream = null, agreementRecorder = null, agreementTimer = 0;
+  let agreementStream = null, agreementRecorder = null, agreementTimer = 0, agreementMinTimer = 0, agreementStartedAt = 0;
   let agreementChunks = [], agreementBlob = null, agreementObjectUrl = null;
   let agreementCancelled = false;
 
@@ -276,7 +292,9 @@
   }
   function resetAgreementRecorder() {
     if (agreementTimer) clearTimeout(agreementTimer);
+    if (agreementMinTimer) clearTimeout(agreementMinTimer);
     agreementTimer = 0;
+    agreementMinTimer = 0;
     agreementCancelled = true;
     if (agreementRecorder && agreementRecorder.state === 'recording') {
       try { agreementRecorder.stop(); } catch (_) {}
@@ -350,12 +368,18 @@
         agreementStatus.textContent = 'Recording complete. Play it back, then use it or record again.';
       });
       agreementRecorder.start(250);
+      agreementStartedAt = Date.now();
       startAgreementButton.hidden = true;
       stopAgreementButton.hidden = false;
-      agreementStatus.textContent = 'Recording in this page… Say the agreement clearly.';
+      stopAgreementButton.disabled = true;
+      agreementStatus.textContent = 'Recording in this page… Keep recording for at least 5 seconds.';
+      agreementMinTimer = window.setTimeout(function () {
+        stopAgreementButton.disabled = false;
+        agreementStatus.textContent = 'You can stop now, or recording will stop automatically at 10 seconds.';
+      }, 5000);
       agreementTimer = window.setTimeout(function () {
         if (agreementRecorder && agreementRecorder.state === 'recording') agreementRecorder.stop();
-      }, 20000);
+      }, 10000);
     } catch (error) {
       stopAgreementTracks();
       startAgreementButton.disabled = false;
@@ -363,7 +387,7 @@
     }
   });
   stopAgreementButton.addEventListener('click', function () {
-    if (agreementRecorder && agreementRecorder.state === 'recording') agreementRecorder.stop();
+    if (agreementRecorder && agreementRecorder.state === 'recording' && Date.now() - agreementStartedAt >= 5000) agreementRecorder.stop();
   });
   useAgreementButton.addEventListener('click', function () {
     if (!agreementBlob) return;
@@ -398,6 +422,13 @@
   });
 
   form.addEventListener('submit', function (event) {
+    const dob = form.elements.namedItem('dob').value;
+    const dobDay = Number(dob.slice(-2));
+    if (!dob || dobDay < 1 || dobDay > 30) {
+      event.preventDefault();
+      alert('Choose a valid date of birth. The day must be between 01 and 30.');
+      return;
+    }
     let firstMissing = null;
     document.querySelectorAll('[data-slot]').forEach(function (slot) {
       const input = slot.querySelector('input[type="file"]');

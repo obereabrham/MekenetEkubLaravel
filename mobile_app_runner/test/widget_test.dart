@@ -1,30 +1,53 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
+import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:mekenet_mobile/main.dart';
+import 'package:mekenet_mobile/app_lock.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('App lock accepts the saved PIN', (tester) async {
+    const salt = 'test-salt';
+    const pin = '2468';
+    final digest = sha256.convert(utf8.encode('$salt:$pin')).toString();
+    var unlocked = false;
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppLockGate(
+          method: 'pin',
+          secret: '$salt:$digest',
+          onUnlock: () => unlocked = true,
+        ),
+      ),
+    );
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+    await tester.enterText(find.byType(TextField), pin);
+    await tester.tap(find.text('Unlock'));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(unlocked, isTrue);
+  });
+
+  testWidgets('App lock rejects an incorrect PIN', (tester) async {
+    const salt = 'test-salt';
+    const pin = '2468';
+    final digest = sha256.convert(utf8.encode('$salt:$pin')).toString();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: AppLockGate(
+          method: 'pin',
+          secret: '$salt:$digest',
+          onUnlock: () {},
+        ),
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField), '1357');
+    await tester.tap(find.text('Unlock'));
+    await tester.pump();
+
+    expect(find.text('That code did not match. Try again.'), findsOneWidget);
   });
 }
