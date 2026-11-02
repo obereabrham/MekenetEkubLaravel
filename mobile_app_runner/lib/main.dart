@@ -5464,10 +5464,17 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
     try {
       final image = await picker.pickImage(
         source: source,
-        imageQuality: 88,
-        maxWidth: 2200,
+        imageQuality: 70,
+        maxWidth: 1400,
+        maxHeight: 1400,
       );
-      if (image != null && mounted) setState(() => receipt = image);
+      if (image != null && mounted) {
+        if (await image.length() > 1024 * 1024) {
+          setState(() => error = 'Receipt images must be 1 MB or smaller.');
+          return;
+        }
+        setState(() => receipt = image);
+      }
     } catch (_) {
       if (mounted) setState(() => error = 'Could not open the image picker.');
     }
@@ -6445,6 +6452,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   XFile? photo, front, back, video, profilePicture;
   List<XFile> merchantAdImages = [];
   int? merchantAdEkubId;
+  int? videoDurationSeconds;
   bool livenessPassed = false;
   bool loading = true, busy = false, emailCodeSent = false;
   bool emailChangeCodeSent = false;
@@ -6453,6 +6461,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
 
   TextEditingController field(String key) =>
       fields.putIfAbsent(key, () => TextEditingController());
+
   @override
   void initState() {
     super.initState();
@@ -6749,11 +6758,14 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     }
     final isVideo = key == 'video';
     if (isVideo) {
-      final recordedVideo = await Navigator.of(context).push<XFile?>(
+      final recordedVideo = await Navigator.of(context).push<AgreementVideoCaptureResult?>(
         MaterialPageRoute(builder: (_) => const AgreementVideoCapturePage()),
       );
       if (recordedVideo != null && mounted) {
-        setState(() => video = recordedVideo);
+        setState(() {
+          video = recordedVideo.file;
+          videoDurationSeconds = recordedVideo.durationSeconds;
+        });
       }
       return;
     }
@@ -6809,7 +6821,12 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     if (source == null || !mounted) return;
     XFile? file;
     try {
-      file = await picker.pickImage(source: source, imageQuality: 88);
+      file = await picker.pickImage(
+        source: source,
+        imageQuality: 70,
+        maxWidth: 1400,
+        maxHeight: 1400,
+      );
     } on PlatformException catch (exception) {
       if (mounted)
         _snack(
@@ -6820,7 +6837,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     }
     if (file == null || !mounted) return;
     if (await file.length() > 1024 * 1024) {
-      _snack(context, 'Images must be 1 MB or smaller. Choose a smaller image.');
+      _snack(context, 'Each image must be 1 MB or smaller. Choose a smaller image.');
       return;
     }
     setState(() {
@@ -6956,7 +6973,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         front == null ||
         (idType == 'National ID' && back == null) ||
         !livenessPassed ||
-        video == null) {
+        video == null ||
+        videoDurationSeconds == null ||
+        videoDurationSeconds! < 5 ||
+        videoDurationSeconds! > 10) {
       _snack(
         context,
         'Pass the live face check and add the agreement video and required ID documents.',
@@ -6974,6 +6994,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
           'id_type': idType!,
           'id_number': field('id_number').text.trim(),
           'liveness_verified': '1',
+          'video_duration_seconds': videoDurationSeconds!.toString(),
         },
         files: {
           'personal_photo': photo!.path,
@@ -6991,6 +7012,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         back = null;
         livenessPassed = false;
         video = null;
+        videoDurationSeconds = null;
       });
     } on ApiException catch (e) {
       if (mounted) _snack(context, e.message);
