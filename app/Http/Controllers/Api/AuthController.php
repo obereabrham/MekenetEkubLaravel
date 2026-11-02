@@ -194,9 +194,10 @@ class AuthController
 
         RateLimiter::hit($limitKey, 60);
 
+        $phone = $this->normalizedPhone($login);
         $user = DB::table('users')
             ->where('username', $login)
-            ->orWhere('phone', $login)
+            ->orWhere('phone', $phone ?? $login)
             ->orWhere('email', mb_strtolower($login))
             ->first();
 
