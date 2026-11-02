@@ -259,6 +259,7 @@ class WebsiteController
     }
     private function imageUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null): ?string
     {
+        if ($file && $file->getSize() > 1024 * 1024) throw new \RuntimeException('Images must be 1 MB or smaller.');
         return $this->saveUpload($file, $folder, $base, ['png','jpg','jpeg','webp','gif']);
     }
     private function insertEkub(string $name, string $category, string $frequency, float $amount, int $duration, bool $isItem, array $images = [], ?int $recreatedFrom = null): int
@@ -348,7 +349,8 @@ class WebsiteController
             $ident=trim((string)$request->input('identifier')); $password=(string)$request->input('password');
             if (! $ident || ! $password) $this->flash('Username, phone or email and password are required.','error');
             else {
-                $user=$this->row(DB::table('users')->where('username',$ident)->orWhere('phone',$ident)->orWhere('email',$ident)->first());
+                $phone=$this->normalizedPhone($ident);
+                $user=$this->row(DB::table('users')->where('username',$ident)->orWhere('phone',$phone ?? $ident)->orWhere('email',mb_strtolower($ident))->first());
                 if (! $user || ! Hash::check($password,$user['password_hash'])) $this->flash('Invalid login credentials.','error');
                 elseif ($user['status'] !== 'active') $this->flash('This account is suspended.','error');
                 elseif ($user['twofa_enabled']) {
@@ -488,6 +490,12 @@ class WebsiteController
             try {
                 if(!in_array($idType,['National ID','Passport'],true)) throw new \RuntimeException('Please choose an ID type.');
                 if((string)$request->input('liveness_verified')!=='1') throw new \RuntimeException('Pass the in-page live face check before submitting.');
+                $rawDob=trim((string)$request->input('dob'));
+                $parsedDob=\DateTimeImmutable::createFromFormat('!Y-m-d',$rawDob);
+                $dobErrors=\DateTimeImmutable::getLastErrors();
+                if(!$parsedDob || ($dobErrors!==false && ($dobErrors['warning_count']>0 || $dobErrors['error_count']>0)) || $parsedDob->format('Y-m-d')!==$rawDob || $parsedDob>=new \DateTimeImmutable('today')) throw new \RuntimeException('Enter a valid date of birth before today.');
+                $videoDuration=$request->input('video_duration_seconds');
+                if(!is_numeric($videoDuration) || (float)$videoDuration<5 || (float)$videoDuration>10) throw new \RuntimeException('The agreement video must be between 5 and 10 seconds.');
                 $base=preg_replace('/\D/','',(string)$user['phone']);
                 $photo=$this->imageUpload($request->file('personal_photo'),'personal_photo',$name.'_'.$base.'_photo'); if($photo)$saved[]=$photo;
                 $front=$this->imageUpload($request->file('id_front'),'id_passport',$name.'_'.$base.($idType==='Passport'?'_passport':'_id-front')); if($front)$saved[]=$front;
@@ -496,7 +504,7 @@ class WebsiteController
                 if(!$photo) throw new \RuntimeException('Personal photo is required.');
                 if(!$front || ($idType==='National ID' && !$back)) throw new \RuntimeException($idType==='National ID'?'National ID requires both the front and back images.':'Passport requires one image.');
                 if(!$video) throw new \RuntimeException('Video agreement is required.');
-                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$request->input('dob'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$video,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
+                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$parsedDob->format('Y-m-d'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$video,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
                 DB::table('users')->where('id',$user['id'])->update(['kyc_status'=>'pending']);
                 $this->flash('KYC submitted. Please wait for approval.','success'); return $this->go('kyc');
             } catch(Throwable $e) { foreach($saved as $file) app(UploadStorage::class)->delete($file); $this->flash($e->getMessage(),'error'); }
@@ -600,8 +608,8 @@ class WebsiteController
             $extension = strtolower((string) ($upload?->getClientOriginalExtension() ?? ''));
             $mime = (string) ($upload?->getMimeType() ?? '');
             $allowedReceiptMimes = ['jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'];
-            if (! $upload || ! $upload->isValid() || ! isset($allowedReceiptMimes[$extension]) || $mime !== $allowedReceiptMimes[$extension] || $upload->getSize() > 8 * 1024 * 1024) {
-                $this->flash('Attach a clear JPG, PNG, or WebP transfer receipt up to 8 MB.', 'error');
+            if (! $upload || ! $upload->isValid() || ! isset($allowedReceiptMimes[$extension]) || $mime !== $allowedReceiptMimes[$extension] || $upload->getSize() > 1024 * 1024) {
+                $this->flash('Attach a clear JPG, PNG, or WebP transfer receipt up to 1 MB.', 'error');
                 return $this->go('pay', ['ekub_id' => $ekubId, 'period_no' => $periodNo]);
             }
 
