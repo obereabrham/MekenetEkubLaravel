@@ -16,6 +16,10 @@ class UploadStorage
 
     public function put(UploadedFile $file, string $path): string
     {
+        if (str_starts_with(strtolower((string) $file->getMimeType()), 'image/') && $file->getSize() > 1024 * 1024) {
+            throw new RuntimeException('Images must be 1 MB or smaller.');
+        }
+
         $path = $this->normalizePath($path);
         $directory = dirname($path);
         $stored = Storage::disk($this->diskName())->putFileAs(
