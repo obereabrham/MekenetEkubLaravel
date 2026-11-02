@@ -68,6 +68,46 @@ extension _MekenetPaletteContext on BuildContext {
   _MekenetPalette get palette => Theme.of(this).extension<_MekenetPalette>()!;
 }
 
+class _DateOfBirthInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final oldDigits = oldValue.text.replaceAll(RegExp(r'\D'), '');
+    if (newValue.text.length < oldValue.text.length && digits.length == oldDigits.length && digits.isNotEmpty) {
+      digits = digits.substring(0, digits.length - 1);
+    }
+    if (digits.length > 8) return oldValue;
+    final value = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i == 4 || i == 6) value.write('-');
+      value.write(digits[i]);
+    }
+    final text = value.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+      composing: TextRange.empty,
+    );
+  }
+}
+
+String? _validateDateOfBirth(String? value) {
+  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch((value ?? '').trim());
+  if (match == null) return 'Enter the date as YYYY-MM-DD.';
+  final year = int.parse(match.group(1)!);
+  final month = int.parse(match.group(2)!);
+  final day = int.parse(match.group(3)!);
+  if (year < 1900 || month < 1 || month > 12) return 'Enter a valid year and month.';
+  final date = DateTime(year, month, day);
+  if (day < 1 || date.year != year || date.month != month || date.day != day) {
+    return 'Enter a real calendar date.';
+  }
+  if (!DateUtils.dateOnly(date).isBefore(DateUtils.dateOnly(DateTime.now()))) {
+    return 'Date of birth must be before today.';
+  }
+  return null;
+}
+
 ThemeData _makeTheme(Brightness brightness) {
   final dark = brightness == Brightness.dark;
   final palette = _MekenetPalette(
@@ -5364,10 +5404,17 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
     try {
       final image = await picker.pickImage(
         source: source,
-        imageQuality: 88,
-        maxWidth: 2200,
+        imageQuality: 70,
+        maxWidth: 1400,
+        maxHeight: 1400,
       );
-      if (image != null && mounted) setState(() => receipt = image);
+      if (image != null && mounted) {
+        if (await image.length() > 1024 * 1024) {
+          setState(() => error = 'Receipt images must be 1 MB or smaller.');
+          return;
+        }
+        setState(() => receipt = image);
+      }
     } catch (_) {
       if (mounted) setState(() => error = 'Could not open the image picker.');
     }
@@ -6306,6 +6353,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       gender = 'Male',
       reason = 'I no longer need the service';
   XFile? photo, front, back, video, profilePicture;
+  int? videoDurationSeconds;
   bool livenessPassed = false;
   bool loading = true, busy = false, emailCodeSent = false;
   bool emailChangeCodeSent = false;
@@ -6314,6 +6362,28 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
 
   TextEditingController field(String key) =>
       fields.putIfAbsent(key, () => TextEditingController());
+
+  Future<void> _chooseDateOfBirth() async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final lastDate = today.subtract(const Duration(days: 1));
+    final existing = DateTime.tryParse(field('dob').text);
+    final fallback = DateTime(today.year - 18, today.month, today.day);
+    final initialDate = existing != null &&
+            !existing.isAfter(lastDate) &&
+            !existing.isBefore(DateTime(1900))
+        ? existing
+        : (fallback.isAfter(lastDate) ? lastDate : fallback);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1900),
+      lastDate: lastDate,
+    );
+    if (picked == null || !mounted) return;
+    field('dob').text =
+        '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -6485,11 +6555,14 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     }
     final isVideo = key == 'video';
     if (isVideo) {
-      final recordedVideo = await Navigator.of(context).push<XFile?>(
+      final recordedVideo = await Navigator.of(context).push<AgreementVideoCaptureResult?>(
         MaterialPageRoute(builder: (_) => const AgreementVideoCapturePage()),
       );
       if (recordedVideo != null && mounted) {
-        setState(() => video = recordedVideo);
+        setState(() {
+          video = recordedVideo.file;
+          videoDurationSeconds = recordedVideo.durationSeconds;
+        });
       }
       return;
     }
@@ -6545,7 +6618,12 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     if (source == null || !mounted) return;
     XFile? file;
     try {
-      file = await picker.pickImage(source: source, imageQuality: 88);
+      file = await picker.pickImage(
+        source: source,
+        imageQuality: 70,
+        maxWidth: 1400,
+        maxHeight: 1400,
+      );
     } on PlatformException catch (exception) {
       if (mounted)
         _snack(
@@ -6555,6 +6633,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       return;
     }
     if (file == null || !mounted) return;
+    if (await file.length() > 1024 * 1024) {
+      _snack(context, 'Each image must be 1 MB or smaller. Choose a smaller image.');
+      return;
+    }
     setState(() {
       if (key == 'photo') photo = file;
       if (key == 'front') front = file;
@@ -6658,7 +6740,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         front == null ||
         (idType == 'National ID' && back == null) ||
         !livenessPassed ||
-        video == null) {
+        video == null ||
+        videoDurationSeconds == null ||
+        videoDurationSeconds! < 5 ||
+        videoDurationSeconds! > 10) {
       _snack(
         context,
         'Pass the live face check and add the agreement video and required ID documents.',
@@ -6676,6 +6761,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
           'id_type': idType!,
           'id_number': field('id_number').text.trim(),
           'liveness_verified': '1',
+          'video_duration_seconds': videoDurationSeconds!.toString(),
         },
         files: {
           'personal_photo': photo!.path,
@@ -6693,6 +6779,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         back = null;
         livenessPassed = false;
         video = null;
+        videoDurationSeconds = null;
       });
     } on ApiException catch (e) {
       if (mounted) _snack(context, e.message);
@@ -7832,14 +7919,19 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         const SizedBox(height: 10),
                         TextFormField(
                           controller: field('dob'),
-                          keyboardType: TextInputType.datetime,
-                          decoration: const InputDecoration(
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [_DateOfBirthInputFormatter()],
+                          decoration: InputDecoration(
                             labelText: 'Date of birth (YYYY-MM-DD)',
-                            prefixIcon: Icon(Icons.calendar_today_outlined),
+                            hintText: 'YYYY-MM-DD',
+                            prefixIcon: const Icon(Icons.calendar_today_outlined),
+                            suffixIcon: IconButton(
+                              tooltip: 'Choose date from calendar',
+                              onPressed: busy ? null : _chooseDateOfBirth,
+                              icon: const Icon(Icons.date_range_rounded),
+                            ),
                           ),
-                          validator: (v) => (v == null || v.trim().isEmpty)
-                              ? 'Enter your date of birth.'
-                              : null,
+                          validator: _validateDateOfBirth,
                         ),
                         const SizedBox(height: 10),
                         DropdownButtonFormField<String>(
