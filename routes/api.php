@@ -17,14 +17,16 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/2fa/resend', [AuthController::class, 'resendEmailCode'])->middleware('throttle:3,1');
         Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1');
         Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:8,1');
+    });
 
-        Route::middleware(['auth:sanctum', 'member.api'])->post('/logout', [AuthController::class, 'logout']);
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::get('/me', [AuthController::class, 'me']);
+        Route::post('/auth/logout', [AuthController::class, 'logout']);
     });
 
     Route::get('/ads', [MemberController::class, 'ads'])->middleware('throttle:30,1');
 
     Route::middleware(['auth:sanctum', 'member.api'])->group(function (): void {
-        Route::get('/me', [AuthController::class, 'me']);
         Route::get('/notifications', [MemberController::class, 'notifications']);
         Route::post('/notifications/read', [MemberController::class, 'readNotifications']);
         Route::post('/profile', [ProfileController::class, 'updateProfile']);
@@ -63,6 +65,14 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/payments/{ekubId}/{periodNo}', [PaymentController::class, 'submitManual'])
             ->whereNumber('ekubId')
             ->whereNumber('periodNo');
+    });
+
+    Route::prefix('admin')->middleware(['auth:sanctum', 'admin.api'])->group(function (): void {
+        Route::get('/merchants', [\App\Http\Controllers\Api\AdminMerchantController::class, 'index']);
+        Route::post('/merchants/{merchantId}/{action}', [\App\Http\Controllers\Api\AdminMerchantController::class, 'review'])
+            ->whereNumber('merchantId')->whereIn('action', ['approve', 'reject']);
+        Route::post('/merchant-commissions/{commissionId}/paid', [\App\Http\Controllers\Api\AdminMerchantController::class, 'markCommissionPaid'])
+            ->whereNumber('commissionId');
     });
 });
 

@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'app_lock.dart';
 import 'api.dart';
+import 'admin_merchant_page.dart';
 import 'agreement_video_capture_page.dart';
 import 'liveness_capture_page.dart';
 
@@ -315,6 +316,12 @@ class _MekenetAppState extends State<MekenetApp> with WidgetsBindingObserver {
               },
               isDark: themeMode == ThemeMode.dark,
               onToggleTheme: _toggleTheme,
+            )
+          : user!['role'] == 'admin'
+          ? AdminMerchantPage(
+              api: widget.api,
+              user: user!,
+              onSignOut: _signOut,
             )
           : MemberPage(
               api: widget.api,
@@ -687,7 +694,7 @@ class _AuthPageState extends State<AuthPage> {
                           ? 'Enter the code sent to your account to continue.'
                           : registering
                           ? 'Create your Mekenet Ekub account and start saving together.'
-                          : 'Manage your Ekubs and track your contributions.',
+                          : 'Manage your Ekubs and contributions. Admin accounts can review merchant applications after two-step verification.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: context.palette.muted,

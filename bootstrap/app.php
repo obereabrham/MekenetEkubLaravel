@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.session' => AuthenticateSession::class,
             'role' => RequireRole::class,
             'member.api' => EnsureActiveMember::class,
+            'admin.api' => \App\Http\Middleware\EnsureActiveAdmin::class,
         ]);
         $middleware->web(append: [TrackSiteVisit::class]);
     })
