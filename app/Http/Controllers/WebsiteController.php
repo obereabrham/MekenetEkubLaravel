@@ -452,8 +452,8 @@ class WebsiteController
         if ($user['role']==='partner') return $this->go('partner_dashboard');
         $available=$this->rows(DB::table('ekubs')->whereIn('status',['open','started'])->orderByDesc('id')->get());
         $joined=$this->rows(DB::table('ekub_members as m')->join('ekubs as e','e.id','=','m.ekub_id')->where('m.user_id',$user['id'])->orderByDesc('m.id')->get(['e.*','m.share_type','m.share_fraction','m.contribution_amount','m.id as member_id']));
-        $celebrate=$this->rows(DB::table('payouts as p')->join('ekub_members as m','m.id','=','p.winner_member_id')->join('ekubs as e','e.id','=','p.ekub_id')->where('m.user_id',$user['id'])->where('p.celebrated',0)->orderBy('p.id')->get(['p.id','p.period_no','p.net_amount','e.name as ekub_name']));
-        if ($celebrate) DB::table('payouts')->whereIn('id',array_column($celebrate,'id'))->update(['celebrated'=>1]);
+        $celebrate=$this->rows(DB::table('payouts as p')->join('ekub_members as m','m.id','=','p.winner_member_id')->join('ekubs as e','e.id','=','p.ekub_id')->where('m.user_id',$user['id'])->where('p.celebrated',false)->orderBy('p.id')->get(['p.id','p.period_no','p.net_amount','e.name as ekub_name']));
+        if ($celebrate) DB::table('payouts')->whereIn('id',array_column($celebrate,'id'))->update(['celebrated'=>true]);
         $groups=[]; foreach($available as $e) $groups[$e['category'] ?: 'Other'][]=$e;
         $categories=array_map(fn($name,$items)=>['name'=>$name,'ekubs'=>$items],array_keys($groups),array_values($groups));
         $counts=['available_ekubs'=>count($available),'joined_ekubs'=>count($joined),'total_paid'=>(float)DB::table('payments')->where('user_id',$user['id'])->where('status','approved')->sum('approved_amount')];
@@ -868,13 +868,13 @@ class WebsiteController
     }
     public function adminMembers()
     {
-        $rows=$this->rows(DB::table('users as u')->join('kyc_verifications as k','k.user_id','=','u.id')->leftJoin('payment_methods as pm',function($join){$join->on('pm.user_id','=','u.id')->where('pm.is_default',1);})->where('u.kyc_status','approved')->orderBy('u.id')->get(['u.*','k.full_name as kyc_name','k.dob','k.gender','k.id_type','k.id_number','k.id_front','k.id_back','k.personal_photo','k.video_agreement','k.approved_by','pm.bank_name as pm_bank','pm.account_number as pm_number','pm.account_name as pm_name']));
+        $rows=$this->rows(DB::table('users as u')->join('kyc_verifications as k','k.user_id','=','u.id')->leftJoin('payment_methods as pm',function($join){$join->on('pm.user_id','=','u.id')->where('pm.is_default',true);})->where('u.kyc_status','approved')->orderBy('u.id')->get(['u.*','k.full_name as kyc_name','k.dob','k.gender','k.id_type','k.id_number','k.id_front','k.id_back','k.personal_photo','k.video_agreement','k.approved_by','pm.bank_name as pm_bank','pm.account_number as pm_number','pm.account_name as pm_name']));
         return $this->page('members',['rows'=>$rows]);
     }
     public function partnerMembers()
     {
         if(!$this->partnerAllowed('member_info'))return $this->page('error',['code'=>403,'message'=>'Member information permission required.']);
-        return $this->page('partner_members',['rows'=>$this->rows(DB::table('users as u')->join('kyc_verifications as k','k.user_id','=','u.id')->leftJoin('payment_methods as pm',function($join){$join->on('pm.user_id','=','u.id')->where('pm.is_default',1);})->where('u.kyc_status','approved')->get(['u.*','k.full_name as kyc_name','k.dob','k.gender','k.id_type','k.id_number','k.id_front','k.id_back','k.personal_photo','k.video_agreement','k.approved_by','pm.bank_name as pm_bank','pm.account_number as pm_number','pm.account_name as pm_name'])),'partner'=>true]);
+        return $this->page('partner_members',['rows'=>$this->rows(DB::table('users as u')->join('kyc_verifications as k','k.user_id','=','u.id')->leftJoin('payment_methods as pm',function($join){$join->on('pm.user_id','=','u.id')->where('pm.is_default',true);})->where('u.kyc_status','approved')->get(['u.*','k.full_name as kyc_name','k.dob','k.gender','k.id_type','k.id_number','k.id_front','k.id_back','k.personal_photo','k.video_agreement','k.approved_by','pm.bank_name as pm_bank','pm.account_number as pm_number','pm.account_name as pm_name'])),'partner'=>true]);
     }
     public function partnerKyc() { if(!$this->partnerAllowed('kyc_approval'))return $this->page('error',['code'=>403,'message'=>'KYC permission required.']);return $this->adminKyc(); }
     public function paymentMethods(Request $request)
@@ -896,7 +896,7 @@ class WebsiteController
     public function paymentMethodDefault(int $pmId)
     {
         $userId=session('user_id');$exists=DB::table('payment_methods')->where('id',$pmId)->where('user_id',$userId)->exists();
-        if($exists){DB::table('payment_methods')->where('user_id',$userId)->update(['is_default'=>0]);DB::table('payment_methods')->where('id',$pmId)->update(['is_default'=>1]);$this->flash('Default payment method updated.','success');}
+        if($exists){DB::table('payment_methods')->where('user_id',$userId)->update(['is_default'=>false]);DB::table('payment_methods')->where('id',$pmId)->update(['is_default'=>true]);$this->flash('Default payment method updated.','success');}
         return $this->go('payment_methods');
     }
     public function settings()
@@ -1019,7 +1019,7 @@ class WebsiteController
             if($state['error'])return ['error'=>$state['error']];
             $winnerIndex=random_int(0,count($state['members'])-1);$winner=$state['members'][$winnerIndex];
             $gross=(float)DB::table('payments')->where('ekub_id',$ekubId)->where('period_no',$periodNo)->where('status','approved')->sum('approved_amount');$fee=round($gross*0.02,2);$net=round($gross*0.98,2);
-            DB::table('payouts')->insert(['ekub_id'=>$ekubId,'period_no'=>$periodNo,'winner_member_id'=>$winner['id'],'gross_amount'=>$gross,'service_fee'=>$fee,'net_amount'=>$net,'status'=>'pending','created_at'=>now(),'celebrated'=>0]);
+            DB::table('payouts')->insert(['ekub_id'=>$ekubId,'period_no'=>$periodNo,'winner_member_id'=>$winner['id'],'gross_amount'=>$gross,'service_fee'=>$fee,'net_amount'=>$net,'status'=>'pending','created_at'=>now(),'celebrated'=>false]);
             $next=min((int)$ekub['duration'],$periodNo+1);DB::table('ekubs')->where('id',$ekubId)->update(['current_period'=>$next]);
             if($next>$periodNo){DB::table('ekubs')->where('id',$ekubId)->update(['period_started_at'=>now()]);DB::table('period_dues')->updateOrInsert(['ekub_id'=>$ekubId,'period_no'=>$next],['started_at'=>now()]);}
             $newId=$periodNo >= (int)$ekub['duration'] ? $this->finishIfComplete($ekubId) : null;
@@ -1048,7 +1048,7 @@ class WebsiteController
     {
         if(!$this->partnerAllowed('recent_winner'))return $this->page('error',['code'=>403,'message'=>'Recently Winner permission required.']);
         $rows=$this->rows(DB::table('payouts as p')->join('ekubs as e','e.id','=','p.ekub_id')->join('ekub_members as m','m.id','=','p.winner_member_id')->join('users as u','u.id','=','m.user_id')
-            ->leftJoin('kyc_verifications as k','k.user_id','=','u.id')->leftJoin('payment_methods as pm',function($join){$join->on('pm.user_id','=','u.id')->where('pm.is_default',1);})
+            ->leftJoin('kyc_verifications as k','k.user_id','=','u.id')->leftJoin('payment_methods as pm',function($join){$join->on('pm.user_id','=','u.id')->where('pm.is_default',true);})
             ->whereNull('p.sent_at')->orderByDesc('p.created_at')->orderByDesc('p.id')->get(['p.id as payout_id','p.ekub_id','p.period_no','p.gross_amount','p.service_fee','p.net_amount','p.created_at','e.name as ekub_name','e.category','e.frequency','u.id as user_id','u.first_name','u.last_name','u.username','u.phone','u.email','u.kyc_status','k.full_name as kyc_name','k.dob','k.gender','k.id_type','k.id_number','pm.bank_name as pm_bank','pm.account_number as pm_number','pm.account_name as pm_name']));
         return $this->page('recent_winners',['rows'=>$rows]);
     }
