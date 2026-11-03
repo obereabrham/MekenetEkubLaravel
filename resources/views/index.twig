@@ -351,6 +351,50 @@ Mekenet Ekub | Digital Ekub Platform
 
 
 <!-- ================================= -->
+<!-- COMMUNITY REVIEWS -->
+<!-- ================================= -->
+
+<section class="community-reviews-section" id="community-reviews">
+    <div class="community-reviews-heading">
+        <div>
+            <span class="section-label">COMMUNITY FEEDBACK</span>
+            <h2>Reviews from Ekub members</h2>
+            <p>See what members think about using Mekenet Ekub.</p>
+        </div>
+        <div class="community-rating-summary" aria-label="Average rating {{site_rating_average|default(0)}} out of 5 from {{site_rating_count|default(0)}} ratings">
+            <span class="community-rating-star" aria-hidden="true">★</span>
+            <strong>{{site_rating_average|default(0)}}<small>/5</small></strong>
+            <span>{{site_rating_count|default(0)}} ratings</span>
+        </div>
+    </div>
+
+    {% if site_reviews|default([])|length %}
+    <div class="community-reviews-grid">
+        {% for review in site_reviews %}
+        <article class="community-review-card">
+            <div class="community-review-top">
+                <span class="community-review-avatar" aria-hidden="true">{{review.username|default('M')|slice(0, 1)|upper}}</span>
+                <div class="community-review-author">
+                    <strong>@{{review.username}}</strong>
+                    <span>{{review.rating}} out of 5 stars</span>
+                </div>
+                <span class="community-review-stars" aria-label="{{review.rating}} out of 5 stars">★ {{review.rating}}/5</span>
+            </div>
+            <p>{{review.comment}}</p>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="community-reviews-empty">
+        <span aria-hidden="true">✦</span>
+        <strong>Be the first to share a review</strong>
+        <p>Sign in and use the review form in the footer to tell the community about your experience.</p>
+    </div>
+    {% endif %}
+</section>
+
+
+<!-- ================================= -->
 <!-- CALL TO ACTION -->
 <!-- ================================= -->
 
