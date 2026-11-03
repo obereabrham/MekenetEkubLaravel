@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Support\BrandedEmail;
 use App\Support\UploadStorage;
-use App\Support\VideoDuration;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
@@ -313,6 +312,7 @@ class ProfileController
                     'id_type' => $row->id_type, 'id_number' => $row->id_number, 'status' => $row->status,
                     'rejection_reason' => $row->rejection_reason, 'submitted_at' => $row->submitted_at,
                     'liveness_verified' => (bool) ($row->liveness_verified ?? false),
+                    'rules_accepted' => (bool) ($row->rules_accepted ?? false),
                 ] : null,
             ]);
         }
@@ -342,27 +342,21 @@ class ProfileController
             'personal_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
-            'liveness_verified' => ['required', 'accepted'],
-            'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
-            'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
+            // Older mobile builds may send video fields; accept their existing rules acknowledgement.
+            'rules_accepted' => ['sometimes', 'accepted'],
         ]);
-        try {
-            VideoDuration::assertAgreementLength($data['video_agreement']);
-        } catch (\RuntimeException $exception) {
-            throw ValidationException::withMessages(['video_agreement' => [$exception->getMessage()]]);
-        }
         $saved = [];
         try {
             $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'));
             $saved['id_front'] = $this->storeUpload($request->file('id_front'));
             $saved['id_back'] = $request->file('id_back') ? $this->storeUpload($request->file('id_back')) : null;
-            $saved['video_agreement'] = $this->storeUpload($request->file('video_agreement'));
             DB::table('kyc_verifications')->updateOrInsert(['user_id' => $user->id], [
                 'full_name' => trim($data['full_name']), 'dob' => $data['dob'], 'gender' => $data['gender'],
                 'id_type' => $data['id_type'], 'id_number' => trim($data['id_number']),
                 'id_front' => $saved['id_front'], 'id_back' => $saved['id_back'],
-                'liveness_verified' => true, 'liveness_video' => null,
-                'video_agreement' => $saved['video_agreement'],
+                'liveness_verified' => false, 'liveness_video' => null,
+                'video_agreement' => '',
+                'rules_accepted' => $request->boolean('rules_accepted') || $request->hasFile('video_agreement'),
                 'personal_photo' => $saved['personal_photo'],
                 'status' => 'pending', 'rejection_reason' => null, 'submitted_at' => now(), 'reviewed_at' => null, 'approved_by' => null,
             ]);
