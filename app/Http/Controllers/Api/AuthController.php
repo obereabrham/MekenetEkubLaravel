@@ -211,14 +211,18 @@ class AuthController
             return response()->json(['message' => 'This account is suspended. Contact the site administrator.'], 403);
         }
 
-        if ($user->role !== 'member') {
+        if (! in_array($user->role, ['member', 'admin'], true)) {
             return response()->json(['message' => 'Use the website admin or partner portal for this account.'], 403);
+        }
+
+        if ($user->role === 'admin' && ! (bool) $user->twofa_enabled) {
+            return response()->json(['message' => 'Enable two-step verification on the admin account before using admin tools in the mobile app.'], 403);
         }
 
         if (! (bool) $user->twofa_enabled) {
             RateLimiter::clear($limitKey);
 
-            return $this->issueToken((int) $user->id, $data['device_name'] ?? null);
+            return $this->issueToken((int) $user->id, $data['device_name'] ?? null, (string) $user->role);
         }
 
         $methods = [];
@@ -243,6 +247,7 @@ class AuthController
         $challengeId = bin2hex(random_bytes(32));
         $challenge = [
             'user_id' => (int) $user->id,
+            'role' => (string) $user->role,
             'methods' => $methods,
             'device_name' => $this->deviceName($data['device_name'] ?? null),
             'attempts' => 0,
@@ -308,10 +313,14 @@ class AuthController
         }
 
         $user = DB::table('users')->where('id', $challenge['user_id'])->first();
-        if (! $user || $user->status !== 'active' || $user->role !== 'member') {
+        $role = (string) ($challenge['role'] ?? 'member');
+        if (! in_array($role, ['member', 'admin'], true)
+            || ! $user
+            || $user->status !== 'active'
+            || $user->role !== $role) {
             Cache::forget($key);
 
-            return response()->json(['message' => 'This member account is not active.'], 403);
+            return response()->json(['message' => 'This account is not active or its role changed.'], 403);
         }
 
         $code = trim($data['code']);
@@ -338,7 +347,7 @@ class AuthController
 
         Cache::forget($key);
 
-        return $this->issueToken((int) $user->id, $challenge['device_name'] ?? null);
+        return $this->issueToken((int) $user->id, $challenge['device_name'] ?? null, $role);
     }
 
     public function resendEmailCode(Request $request)
@@ -398,10 +407,11 @@ class AuthController
         return response()->json(['message' => 'Signed out.']);
     }
 
-    private function issueToken(int $userId, ?string $deviceName)
+    private function issueToken(int $userId, ?string $deviceName, string $role = 'member')
     {
         $user = User::query()->findOrFail($userId);
-        $token = $user->createToken($this->deviceName($deviceName), ['member'], now()->addDays(30));
+        abort_unless(in_array($role, ['member', 'admin'], true) && $user->role === $role && $user->status === 'active', 403);
+        $token = $user->createToken($this->deviceName($deviceName), [$role], now()->addDays(30));
         DB::table('users')->where('id', $userId)->update(['first_login' => false]);
 
         return response()->json([
@@ -437,6 +447,7 @@ class AuthController
     {
         return [
             'id' => (int) $user->id,
+            'role' => (string) $user->role,
             'first_name' => $user->first_name,
             'last_name' => $user->last_name,
             'username' => $user->username,
