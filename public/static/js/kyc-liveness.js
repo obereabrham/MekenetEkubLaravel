@@ -295,6 +295,8 @@
   let agreementChunks = [], agreementBlob = null, agreementObjectUrl = null;
   let agreementCancelled = false, agreementDurationSeconds = 0, agreementClock = 0, agreementGenerated = false;
   const agreementDurationInput = document.getElementById('videoDurationSeconds');
+  // Leave time for the container to finalize before the server probes the clip.
+  const minimumRecordedSeconds = 5.5;
 
   function stopAgreementTracks() {
     if (agreementStream) agreementStream.getTracks().forEach(function (track) { track.stop(); });
@@ -361,7 +363,7 @@
         if (agreementClock) clearInterval(agreementClock);
         agreementTimer = agreementClock = 0;
         agreementDurationSeconds = Math.min(10, (performance.now() - agreementStartedAt) / 1000);
-        if (agreementDurationSeconds < 5) {
+        if (agreementDurationSeconds < minimumRecordedSeconds) {
           stopAgreementTracks();
           startAgreementButton.hidden = false;
           startAgreementButton.disabled = false;
@@ -398,7 +400,7 @@
       agreementStatus.textContent = 'Record at least 5 seconds. It will stop automatically at 10 seconds.';
       agreementClock = window.setInterval(function () {
         const elapsed = (performance.now() - agreementStartedAt) / 1000;
-        stopAgreementButton.disabled = elapsed < 5;
+        stopAgreementButton.disabled = elapsed < minimumRecordedSeconds;
         if (elapsed >= 10 && agreementRecorder && agreementRecorder.state === 'recording') agreementRecorder.stop();
       }, 200);
       agreementTimer = window.setTimeout(function () {
@@ -412,7 +414,7 @@
   });
   stopAgreementButton.addEventListener('click', function () {
     if (!agreementRecorder || agreementRecorder.state !== 'recording') return;
-    if ((performance.now() - agreementStartedAt) / 1000 < 5) {
+    if ((performance.now() - agreementStartedAt) / 1000 < minimumRecordedSeconds) {
       agreementStatus.textContent = 'Record for at least 5 seconds before stopping.';
       return;
     }
