@@ -10,8 +10,6 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_lock.dart';
 import 'api.dart';
 import 'admin_merchant_page.dart';
-import 'agreement_video_capture_page.dart';
-import 'liveness_capture_page.dart';
 
 const bg = Color(0xFF0B1110);
 const panel = Color(0xFF151D1B);
@@ -6456,11 +6454,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       idType = 'National ID',
       gender = 'Male',
       reason = 'I no longer need the service';
-  XFile? photo, front, back, video, profilePicture;
+  XFile? photo, front, back, profilePicture;
   List<XFile> merchantAdImages = [];
   int? merchantAdEkubId;
-  int? videoDurationSeconds;
-  bool livenessPassed = false;
+  bool kycRulesAccepted = false;
   bool loading = true, busy = false, emailCodeSent = false;
   bool emailChangeCodeSent = false;
   String? emailChangeRequestedFor;
@@ -6756,26 +6753,6 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   }
 
   Future<void> _pick(String key) async {
-    if (key == 'liveness_video') {
-      final passed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const LivenessCapturePage()),
-      );
-      if (passed == true && mounted) setState(() => livenessPassed = true);
-      return;
-    }
-    final isVideo = key == 'video';
-    if (isVideo) {
-      final recordedVideo = await Navigator.of(context).push<AgreementVideoCaptureResult?>(
-        MaterialPageRoute(builder: (_) => const AgreementVideoCapturePage()),
-      );
-      if (recordedVideo != null && mounted) {
-        setState(() {
-          video = recordedVideo.file;
-          videoDurationSeconds = recordedVideo.durationSeconds;
-        });
-      }
-      return;
-    }
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: context.palette.panel,
@@ -6851,7 +6828,6 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       if (key == 'photo') photo = file;
       if (key == 'front') front = file;
       if (key == 'back') back = file;
-      if (key == 'video') video = file;
       if (key == 'profile_picture') profilePicture = file;
     });
   }
@@ -6978,16 +6954,12 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     if (!form.currentState!.validate()) return;
     if (photo == null ||
         front == null ||
-        (idType == 'National ID' && back == null) ||
-        !livenessPassed ||
-        video == null ||
-        videoDurationSeconds == null ||
-        videoDurationSeconds! < 5 ||
-        videoDurationSeconds! > 10) {
-      _snack(
-        context,
-        'Pass the live face check and add the agreement video and required ID documents.',
-      );
+        (idType == 'National ID' && back == null)) {
+      _snack(context, 'Add your personal photo and required ID documents.');
+      return;
+    }
+    if (!kycRulesAccepted) {
+      _snack(context, 'Accept the Mekenet Ekub Rules before submitting.');
       return;
     }
     setState(() => busy = true);
@@ -7000,14 +6972,12 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
           'gender': gender!,
           'id_type': idType!,
           'id_number': field('id_number').text.trim(),
-          'liveness_verified': '1',
-          'video_duration_seconds': videoDurationSeconds!.toString(),
+          'rules_accepted': '1',
         },
         files: {
           'personal_photo': photo!.path,
           'id_front': front!.path,
           if (idType == 'National ID') 'id_back': back!.path,
-          'video_agreement': video!.path,
         },
       );
       if (mounted)
@@ -7017,9 +6987,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         photo = null;
         front = null;
         back = null;
-        livenessPassed = false;
-        video = null;
-        videoDurationSeconds = null;
+        kycRulesAccepted = false;
       });
     } on ApiException catch (e) {
       if (mounted) _snack(context, e.message);
@@ -7121,8 +7089,6 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
               child: Icon(
                 file != null
                     ? Icons.check_circle_outline
-                    : key == 'video' || key == 'liveness_video'
-                    ? Icons.videocam_outlined
                     : Icons.image_outlined,
                 color: file != null ? green : blue,
               ),
@@ -7138,12 +7104,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    file?.name ??
-                        (key == 'liveness_video'
-                            ? 'Open the live in-app camera check'
-                            : key == 'video'
-                            ? 'Upload or record the consent phrase'
-                            : 'Take a photo or choose an image'),
+                    file?.name ?? 'Take a photo or choose an image',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -8339,42 +8300,14 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         if (idType == 'National ID')
                           _fileTile(context, 'ID back image', back, 'back'),
                         Card(
-                          child: ListTile(
-                            leading: Icon(
-                              livenessPassed
-                                  ? Icons.verified_user_rounded
-                                  : Icons.face_retouching_natural_rounded,
-                              color: livenessPassed ? green : sky,
-                            ),
-                            title: const Text('Live face check'),
-                            subtitle: Text(
-                              livenessPassed
-                                  ? 'Passed on this device. No video saved.'
-                                  : 'Blink, turn your head, then follow the circle.',
-                            ),
-                            trailing: FilledButton.tonal(
-                              onPressed: busy
-                                  ? null
-                                  : () => _pick('liveness_video'),
-                              child: Text(livenessPassed ? 'Repeat' : 'Start'),
-                            ),
-                          ),
-                        ),
-                        _fileTile(
-                          context,
-                          'Agreement video — English or Amharic',
-                          video,
-                          'video',
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          child: Text(
-                            'The live camera check runs in this app and verifies each step before continuing. Then add a separate agreement video saying “I Agree by Mekenet Ekub Rules.” or “በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡” Only the agreement video and ID documents are uploaded.',
-                            style: TextStyle(
-                              color: context.palette.muted,
-                              fontSize: 12,
-                              height: 1.35,
-                            ),
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: CheckboxListTile(
+                            value: kycRulesAccepted,
+                            onChanged: busy ? null : (value) => setState(() => kycRulesAccepted = value ?? false),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: const Text('I agree to the Mekenet Ekub Rules.'),
+                            subtitle: const Text('በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡'),
+                            activeColor: green,
                           ),
                         ),
                         SizedBox(
