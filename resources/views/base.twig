@@ -306,9 +306,26 @@
                 </a>
 
                 {% if session.get("user_id") %}
-                <a href="{{url_for('profile')}}#website-rating">
-                    Rate &amp; review this website
-                </a>
+                <div class="footer-rating-panel" id="footer-rating">
+                    <strong>Rate your experience</strong>
+                    <p>Your review helps the Ekub community.</p>
+                    <form class="footer-rating-form" method="post" action="{{url_for('rate_website')}}">
+                        {{csrf_field()}}
+                        <input type="hidden" name="return_to" value="/">
+                        <label for="footer-site-rating">Your rating</label>
+                        <select id="footer-site-rating" name="rating" required>
+                            <option value="5">★★★★★ — Excellent</option>
+                            <option value="4">★★★★☆ — Good</option>
+                            <option value="3">★★★☆☆ — Okay</option>
+                            <option value="2">★★☆☆☆ — Poor</option>
+                            <option value="1">★☆☆☆☆ — Very poor</option>
+                        </select>
+                        <label for="footer-site-comment">Comment</label>
+                        <textarea id="footer-site-comment" name="comment" maxlength="1000" rows="3" placeholder="Share your experience (optional)"></textarea>
+                        <button class="footer-rating-submit" type="submit">Share review</button>
+                    </form>
+                    <a class="footer-reviews-link" href="{{url_for('home')}}#community-reviews">Read community reviews</a>
+                </div>
                 {% else %}
                 <a href="{{url_for('login')}}?return_to=%2Fprofile%23website-rating">
                     Sign in to rate this website
