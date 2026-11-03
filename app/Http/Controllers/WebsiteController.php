@@ -800,7 +800,7 @@ class WebsiteController
     {
         $user=$this->currentUser();$merchant=$this->row(DB::table('merchants')->where('user_id',$user['id'])->first());
         $categories=['Hotel','Shop','Mini market','Super Market','Grocery','School','Import and Export','Drivers','Private Works'];
-        if(!$merchant||$merchant['status']!=='approved')return $this->page('merchant_portal',['merchant'=>$merchant,'business_categories'=>$categories,'categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies')]);
+        if(!$merchant||$merchant['status']!=='approved')return $this->page('merchant_portal',['merchant'=>$merchant,'kyc_status'=>$user['kyc_status']??'not_submitted','business_categories'=>$categories,'categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies')]);
         $ekubs=$this->rows(DB::table('ekubs')->where('merchant_id',$merchant['id'])->orderByDesc('id')->get());
         foreach($ekubs as &$ekub){
             $ekub['member_rows']=$this->rows(DB::table('ekub_members as em')->join('users as u','u.id','=','em.user_id')->where('em.ekub_id',$ekub['id'])->orderBy('em.id')->get(['u.id','u.first_name','u.last_name','u.username','u.phone','u.email','u.kyc_status','em.share_type','em.contribution_amount']));
@@ -811,12 +811,14 @@ class WebsiteController
         }
         unset($ekub);
         $commissionRows=$this->rows(DB::table('merchant_commissions as c')->join('ekubs as e','e.id','=','c.ekub_id')->where('c.merchant_id',$merchant['id'])->orderByDesc('c.id')->get(['c.*','e.name as ekub_name']));
-        return $this->page('merchant_portal',['merchant'=>$merchant,'ekubs'=>$ekubs,'commissions'=>$commissionRows,'commission_total'=>array_sum(array_column($commissionRows,'amount')),'commission_pending'=>array_sum(array_map(fn($c)=>$c['status']==='pending'?(float)$c['amount']:0,$commissionRows)),'categories'=>$categories,'ekub_categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies')]);
+        return $this->page('merchant_portal',['merchant'=>$merchant,'kyc_status'=>$user['kyc_status']??'not_submitted','ekubs'=>$ekubs,'commissions'=>$commissionRows,'commission_total'=>array_sum(array_column($commissionRows,'amount')),'commission_pending'=>array_sum(array_map(fn($c)=>$c['status']==='pending'?(float)$c['amount']:0,$commissionRows)),'categories'=>$categories,'ekub_categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies')]);
     }
     public function merchantApply(Request $request)
     {
+        $user=$this->currentUser();
+        if(($user['kyc_status']??null)!=='approved'){$this->flash('Complete identity verification and wait for admin approval before applying for a merchant account.','error');return $this->go('kyc');}
         $data=$request->validate(['business_name'=>['required','string','max:120'],'tin'=>['required','string','max:40'],'category'=>['required','in:Hotel,Shop,Mini market,Super Market,Grocery,School,Import and Export,Drivers,Private Works'],'business_phone'=>['required','string','max:32'],'address'=>['required','string','max:255'],'website'=>['nullable','url','max:255'],'location'=>['nullable','string','max:255']]);
-        $user=$this->currentUser();$existing=DB::table('merchants')->where('user_id',$user['id'])->first();
+        $existing=DB::table('merchants')->where('user_id',$user['id'])->first();
         if($existing&&$existing->status==='approved'){$this->flash('Your merchant account is already approved.','message');return $this->go('merchant_portal');}
         if(DB::table('merchants')->where('tin',trim($data['tin']))->where('user_id','!=',$user['id'])->exists()){$this->flash('That TIN is already attached to another merchant.','error');return $this->go('merchant_portal');}
         DB::table('merchants')->updateOrInsert(['user_id'=>$user['id']],['business_name'=>trim($data['business_name']),'tin'=>trim($data['tin']),'category'=>$data['category'],'business_phone'=>trim($data['business_phone']),'address'=>trim($data['address']),'website'=>trim((string)($data['website']??''))?:null,'location'=>trim((string)($data['location']??''))?:null,'status'=>'pending','rejection_reason'=>null,'reviewed_by'=>null,'reviewed_at'=>null,'created_at'=>now()]);
