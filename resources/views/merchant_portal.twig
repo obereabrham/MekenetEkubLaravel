@@ -5,6 +5,9 @@
   {% if not merchant or merchant.status != 'approved' %}
     {% if merchant and merchant.status == 'pending' %}<div class="card merchant-state pending"><b>Application under review</b><p>Your submitted business details and TIN are waiting for admin approval.</p></div>
     {% elseif merchant and merchant.status == 'rejected' %}<div class="card merchant-state rejected"><b>Application needs changes</b><p>{{merchant.rejection_reason|default('Review your details and submit again.')}}</p></div>{% endif %}
+    {% if kyc_status|default('not_submitted') != 'approved' %}
+    <section class="card merchant-state pending"><b>Identity verification approval required</b><p>Submit your KYC and wait for admin approval before applying for a merchant account.</p><a class="btn" href="{{url_for('kyc')}}">Open identity verification</a></section>
+    {% else %}
     <section class="card merchant-form-card"><h2>{% if merchant %}Update merchant application{% else %}Apply for a merchant account{% endif %}</h2><p>Admin will verify your TIN, contact details and business category before enabling merchant tools.</p>
       <form method="post" action="{{url_for('merchant_apply')}}">{{csrf_field()}}
         <label>Business name<input name="business_name" required maxlength="120" value="{{merchant.business_name|default('')}}"></label>
@@ -17,6 +20,7 @@
         <button class="btn" type="submit">Submit merchant application</button>
       </form>
     </section>
+    {% endif %}
   {% else %}
     <section class="merchant-earnings"><article class="card"><span>Total commission</span><strong>{{commission_total|number_format(2)}} ETB</strong></article><article class="card"><span>Pending commission</span><strong>{{commission_pending|number_format(2)}} ETB</strong></article></section>
     <section class="card merchant-form-card"><h2>Create a merchant Ekub</h2><p>People join with your invite code. You approve each join request; the admin keeps control of payment and identity verification.</p><form method="post" action="{{url_for('merchant_create_ekub')}}">{{csrf_field()}}<label>Ekub name<input name="name" required maxlength="80"></label><label>Category<select name="category">{% for value in ekub_categories %}<option>{{value}}</option>{% endfor %}</select></label><label>Contribution frequency<select name="frequency">{% for value in frequencies %}<option>{{value}}</option>{% endfor %}</select></label><label>Contribution per period (ETB)<input type="number" name="base_amount" min="0.01" step="0.01" required></label><label>Number of periods<input type="number" name="duration" min="2" max="500" required></label><button class="btn">Create Ekub</button></form></section>
