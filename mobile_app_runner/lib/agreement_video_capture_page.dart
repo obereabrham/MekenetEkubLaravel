@@ -110,11 +110,11 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
   Future<void> _stopRecording() async {
     final camera = _camera;
     if (camera == null || !_recording || _busy) return;
-    if (_seconds < 5) {
-      setState(() => _error = 'Record for at least 5 seconds before stopping.');
+    if (_seconds < 6) {
+      setState(() => _error = 'Keep recording until the timer reaches 6 seconds so the saved video meets the 5-second minimum.');
       return;
     }
-    final recordedSeconds = _seconds.clamp(5, 10).toInt();
+    final recordedSeconds = _seconds.clamp(6, 10).toInt();
     _durationTimer?.cancel();
     _durationTimer = null;
     setState(() => _busy = true);
@@ -328,7 +328,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                   const Text('“በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡”'),
                   const SizedBox(height: 10),
                   Text(
-                    'Record here in the app. The separate live face check is not recorded. Minimum 5 seconds; it stops automatically at 10 seconds.',
+                    'Record here in the app. The separate live face check is not recorded. The stop button enables at 6 seconds to ensure the saved clip is at least 5 seconds. Recording stops automatically at 10 seconds.',
                     style: TextStyle(
                       color: Colors.blueGrey.shade600,
                       fontSize: 12,
@@ -370,9 +370,9 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFD84A4A),
                         ),
-                        onPressed: _busy || _seconds < 5 ? null : _stopRecording,
+                        onPressed: _busy || _seconds < 6 ? null : _stopRecording,
                         icon: const Icon(Icons.stop_rounded),
-                        label: Text(_seconds < 5 ? 'Keep recording · ${5 - _seconds}s' : 'Stop recording'),
+                        label: Text(_seconds < 6 ? 'Keep recording · ${6 - _seconds}s' : 'Stop recording'),
                       ),
                     )
                   else
