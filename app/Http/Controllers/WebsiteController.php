@@ -286,7 +286,22 @@ class WebsiteController
         return in_array($permission, explode(',', $permissions), true);
     }
 
-    public function home() { return $this->page('index'); }
+    public function home()
+    {
+        $reviews = DB::table('site_ratings as ratings')
+            ->join('users', 'users.id', '=', 'ratings.user_id')
+            ->whereNotNull('ratings.comment')
+            ->where('ratings.comment', '<>', '')
+            ->orderByDesc('ratings.updated_at')
+            ->limit(12)
+            ->get(['ratings.rating', 'ratings.comment', 'ratings.updated_at', 'users.username']);
+
+        return $this->page('index', [
+            'site_rating_average' => round((float) (DB::table('site_ratings')->avg('rating') ?? 0), 1),
+            'site_rating_count' => (int) DB::table('site_ratings')->count(),
+            'site_reviews' => $this->rows($reviews),
+        ]);
+    }
     public function homePage() { return $this->go('home'); }
     public function about() { return $this->page('about'); }
     public function contact() { return $this->page('contact'); }
@@ -491,7 +506,9 @@ class WebsiteController
         $data=$request->validate(['rating'=>['required','integer','between:1,5'],'comment'=>['nullable','string','max:1000']]);
         DB::table('site_ratings')->updateOrInsert(['user_id'=>session('user_id')],['rating'=>(int)$data['rating'],'comment'=>trim((string)($data['comment']??''))?:null,'updated_at'=>now()]);
         $this->flash('Thank you for rating Mekenet Ekub.','success');
-        return redirect('/profile#website-rating');
+        $returnTo = (string) $request->input('return_to', '/profile#website-rating');
+        if (! in_array($returnTo, ['/', '/profile#website-rating'], true)) $returnTo = '/profile#website-rating';
+        return redirect($returnTo);
     }
     public function profileEdit(string $field, Request $request)
     {
