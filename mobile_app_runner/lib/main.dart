@@ -7845,6 +7845,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         final merchantStatus = (result['status'] ?? 'not_applied').toString();
         final application = _map(result['application']);
         final approved = merchantStatus == 'approved';
+        final kycApproved = (result['kyc_status'] ?? '').toString() == 'approved';
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
@@ -7856,7 +7857,11 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                 subtitle: Text((application['rejection_reason'] ?? (approved ? 'Create Ekubs and manage your invited members and promotions.' : merchantStatus == 'pending' ? 'Admin is checking your business information.' : merchantStatus == 'rejected' ? 'Update your details and submit again.' : 'Admin will verify your TIN and business details.')).toString()),
               ),
             ),
-            if (!approved) ...[
+            if (!approved && !kycApproved) ...[
+              const SizedBox(height: 12),
+              const Card(child: ListTile(leading: Icon(Icons.verified_user_outlined, color: green), title: Text('KYC approval required'), subtitle: Text('Submit identity verification from Profile and wait for admin approval before applying for a merchant account.'))),
+            ],
+            if (!approved && kycApproved) ...[
               const SizedBox(height: 12),
               Card(child: Padding(padding: const EdgeInsets.all(14), child: Form(key: form, child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                 TextFormField(controller: field('business_name'), decoration: const InputDecoration(labelText: 'Business name'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Enter the business name.' : null),
