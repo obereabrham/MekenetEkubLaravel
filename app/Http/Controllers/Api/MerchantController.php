@@ -16,7 +16,7 @@ class MerchantController
     {
         $userId = (int) $request->user()->id;
         $merchant = DB::table('merchants')->where('user_id', $userId)->first();
-        $options = ['business_categories' => self::CATEGORIES, 'ekub_categories' => config('ekub.categories'), 'frequencies' => config('ekub.frequencies')];
+        $options = ['kyc_status' => (string) $request->user()->kyc_status, 'business_categories' => self::CATEGORIES, 'ekub_categories' => config('ekub.categories'), 'frequencies' => config('ekub.frequencies')];
         if (! $merchant) return response()->json(['status' => 'not_applied'] + $options);
         $payload = (array) $merchant;
         if ($merchant->status !== 'approved') return response()->json(['status' => $merchant->status, 'application' => $payload] + $options);
@@ -39,7 +39,7 @@ class MerchantController
         })->values();
         $commissions = DB::table('merchant_commissions')->where('merchant_id', $merchant->id)->orderByDesc('id')->get();
         return response()->json([
-            'status' => 'approved', 'application' => $payload, 'ekubs' => $ekubs,
+            'status' => 'approved', 'kyc_status' => (string) $request->user()->kyc_status, 'application' => $payload, 'ekubs' => $ekubs,
             'business_categories' => self::CATEGORIES, 'ekub_categories' => config('ekub.categories'), 'frequencies' => config('ekub.frequencies'),
             'commission_total' => (float) $commissions->sum('amount'),
             'commission_pending' => (float) $commissions->where('status', 'pending')->sum('amount'),
@@ -49,6 +49,13 @@ class MerchantController
 
     public function apply(Request $request)
     {
+        if ($request->user()->kyc_status !== 'approved') {
+            return response()->json([
+                'message' => 'Complete identity verification and wait for admin approval before applying for a merchant account.',
+                'kyc_status' => (string) $request->user()->kyc_status,
+            ], 403);
+        }
+
         $data = $request->validate([
             'business_name' => ['required', 'string', 'max:120'],
             'tin' => ['required', 'string', 'max:40'],
