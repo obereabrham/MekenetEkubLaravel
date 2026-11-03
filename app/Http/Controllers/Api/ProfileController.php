@@ -346,7 +346,11 @@ class ProfileController
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
             'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
         ]);
-        VideoDuration::assertAgreementLength($data['video_agreement']);
+        try {
+            VideoDuration::assertAgreementLength($data['video_agreement']);
+        } catch (\RuntimeException $exception) {
+            throw ValidationException::withMessages(['video_agreement' => [$exception->getMessage()]]);
+        }
         $saved = [];
         try {
             $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'));
