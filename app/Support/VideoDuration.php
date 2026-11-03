@@ -16,7 +16,11 @@ class VideoDuration
         $process = new Process([$ffprobe, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', $video->getRealPath()]);
         $process->setTimeout(12);
         $process->run();
-        $duration = $process->isSuccessful() ? (float) trim($process->getOutput()) : 0.0;
+        if (! $process->isSuccessful()) {
+            throw new RuntimeException('The agreement video could not be read. Record it again in the app or choose an MP4 or WebM video.');
+        }
+
+        $duration = (float) trim($process->getOutput());
         if ($duration < 5.0 || $duration > 10.5) {
             throw new RuntimeException('Agreement video must be at least 5 seconds and no longer than 10 seconds. Record it in the app and try again.');
         }
