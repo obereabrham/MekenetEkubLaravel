@@ -342,8 +342,8 @@ class ProfileController
             'personal_photo' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
-            // Older mobile builds may send video fields; accept their existing rules acknowledgement.
-            'rules_accepted' => ['sometimes', 'accepted'],
+            'liveness_verified' => ['required', 'accepted'],
+            'rules_accepted' => ['required', 'accepted'],
         ]);
         $saved = [];
         try {
@@ -354,9 +354,9 @@ class ProfileController
                 'full_name' => trim($data['full_name']), 'dob' => $data['dob'], 'gender' => $data['gender'],
                 'id_type' => $data['id_type'], 'id_number' => trim($data['id_number']),
                 'id_front' => $saved['id_front'], 'id_back' => $saved['id_back'],
-                'liveness_verified' => false, 'liveness_video' => null,
+                'liveness_verified' => $request->boolean('liveness_verified'), 'liveness_video' => null,
                 'video_agreement' => '',
-                'rules_accepted' => $request->boolean('rules_accepted') || $request->hasFile('video_agreement'),
+                'rules_accepted' => $request->boolean('rules_accepted'),
                 'personal_photo' => $saved['personal_photo'],
                 'status' => 'pending', 'rejection_reason' => null, 'submitted_at' => now(), 'reviewed_at' => null, 'approved_by' => null,
             ]);

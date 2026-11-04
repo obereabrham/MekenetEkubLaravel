@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'app_lock.dart';
 import 'api.dart';
 import 'admin_merchant_page.dart';
+import 'liveness_capture_page.dart';
 
 const bg = Color(0xFF0B1110);
 const panel = Color(0xFF151D1B);
@@ -6457,7 +6458,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   XFile? photo, front, back, profilePicture;
   List<XFile> merchantAdImages = [];
   int? merchantAdEkubId;
-  bool kycRulesAccepted = false;
+  bool kycRulesAccepted = false, livenessPassed = false;
   bool loading = true, busy = false, emailCodeSent = false;
   bool emailChangeCodeSent = false;
   String? emailChangeRequestedFor;
@@ -6753,6 +6754,13 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   }
 
   Future<void> _pick(String key) async {
+    if (key == 'liveness_check') {
+      final passed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(builder: (_) => const LivenessCapturePage()),
+      );
+      if (passed == true && mounted) setState(() => livenessPassed = true);
+      return;
+    }
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
       backgroundColor: context.palette.panel,
@@ -6958,6 +6966,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       _snack(context, 'Add your personal photo and required ID documents.');
       return;
     }
+    if (!livenessPassed) {
+      _snack(context, 'Complete the live face check before submitting.');
+      return;
+    }
     if (!kycRulesAccepted) {
       _snack(context, 'Accept the Mekenet Ekub Rules before submitting.');
       return;
@@ -6973,6 +6985,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
           'id_type': idType!,
           'id_number': field('id_number').text.trim(),
           'rules_accepted': '1',
+          'liveness_verified': '1',
         },
         files: {
           'personal_photo': photo!.path,
@@ -6988,6 +7001,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         front = null;
         back = null;
         kycRulesAccepted = false;
+        livenessPassed = false;
       });
     } on ApiException catch (e) {
       if (mounted) _snack(context, e.message);
@@ -8299,6 +8313,27 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         ),
                         if (idType == 'National ID')
                           _fileTile(context, 'ID back image', back, 'back'),
+                        Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: ListTile(
+                            leading: Icon(
+                              livenessPassed
+                                  ? Icons.verified_user_rounded
+                                  : Icons.face_retouching_natural_rounded,
+                              color: livenessPassed ? green : sky,
+                            ),
+                            title: const Text('Live face check'),
+                            subtitle: Text(
+                              livenessPassed
+                                  ? 'Passed on this device. No video saved.'
+                                  : 'Blink, turn your head, then follow the circle.',
+                            ),
+                            trailing: FilledButton.tonal(
+                              onPressed: busy ? null : () => _pick('liveness_check'),
+                              child: Text(livenessPassed ? 'Repeat' : 'Start'),
+                            ),
+                          ),
+                        ),
                         Card(
                           margin: const EdgeInsets.symmetric(vertical: 8),
                           child: CheckboxListTile(
