@@ -9,6 +9,23 @@
 .kyc-preview{margin-top:10px;font-size:.85rem;color:var(--muted,#6b7280);display:flex;align-items:center;gap:10px;word-break:break-all}
 .kyc-preview img{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--border,#e5e7eb)}
 .kyc-note{font-size:.85rem;color:var(--muted,#6b7280);margin:-6px 0 14px}
+
+.kyc-live-summary{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.kyc-live-status{font-weight:800;color:var(--muted,#667085)}
+#liveSlot.missing{border-color:#b42318;box-shadow:0 0 0 2px #b4231820}
+.kyc-live-dialog{width:min(92vw,480px);max-height:90vh;overflow:auto;border:1px solid var(--border,#d0d5dd);border-radius:20px;padding:22px;background:var(--surface,#fff);color:var(--text,#101828);box-shadow:0 24px 70px #0005}
+.kyc-live-dialog::backdrop{background:#061712bb;backdrop-filter:blur(4px)}
+.kyc-live-dialog h2{margin:0 0 10px}
+.kyc-live-camera{position:relative;width:min(68vw,280px);aspect-ratio:1;margin:18px auto;border:4px solid #39b86c;border-radius:50%;overflow:hidden;background:#071f19}
+.kyc-live-camera video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.kyc-live-camera .guide{position:absolute;inset:9%;border:2px dashed #ffffffbb;border-radius:50%;pointer-events:none}
+.kyc-live-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.kyc-live-actions button{flex:1;min-width:120px;padding:12px;border:0;border-radius:12px;font-weight:800;cursor:pointer}
+.kyc-live-primary{background:#20b56a;color:#062b1c}
+.kyc-live-secondary{background:var(--surface-2,#eef2f0);color:inherit}
+.kyc-live-error{color:#b42318;font-weight:700}
+#liveStepCount,#liveRecIndicator{font-size:.82rem;font-weight:800;letter-spacing:.06em;color:#178d54}
+@media(max-width:480px){.kyc-live-dialog{padding:16px}.kyc-live-camera{width:min(68vw,240px)}}
 </style>
 <div class="card form-card"><h1>KYC Verification</h1>{% if locked %}<span class="pill">Verified</span><p>Your KYC is approved and locked.</p>{% elseif kyc and kyc.status=='pending' %}<span class="pill">Under Review</span><p>Submitted successfully. Please wait for approval.</p>{% elseif kyc and kyc.status=='rejected' %}<div class="toast error">Rejected: {{kyc.rejection_reason}}</div><p>Please correct the information and resubmit.</p>{% endif %}
 {% if not locked and (not kyc or kyc.status=='rejected') %}
@@ -41,10 +58,38 @@
   <div class="kyc-preview"></div>
 </div>
 
+<div class="kyc-slot" id="liveSlot">
+  <label>Live face check</label>
+  <p class="kyc-note">Center your face, blink twice, then turn your head left and right. The check runs on this device; it does not record or upload video.</p>
+  <div class="kyc-live-summary">
+    <span class="kyc-live-status" id="liveCheckStatus" role="status" aria-live="polite">Not completed</span>
+    <input type="hidden" id="livenessVerified" name="liveness_verified" value="0">
+    <button class="kyc-live-primary" type="button" id="openLiveCheck">Start live check</button>
+  </div>
+</div>
+
+<dialog class="kyc-live-dialog" id="liveCheckDialog" aria-labelledby="liveCheckTitle">
+  <h2 id="liveCheckTitle">Live face check</h2>
+  <div id="liveRecIndicator">CAMERA READY</div>
+  <div class="kyc-live-camera">
+    <video id="livePreview" autoplay muted playsinline></video>
+    <span class="guide" aria-hidden="true"></span>
+  </div>
+  <div id="liveStepCount">READY</div>
+  <p id="liveStepText" aria-live="polite">Start the camera check. The live face check runs on this device; no video is recorded or uploaded.</p>
+  <p class="kyc-live-error" id="liveError" role="alert"></p>
+  <div class="kyc-live-actions">
+    <button class="kyc-live-primary" type="button" id="startLiveCheck">Start camera</button>
+    <button class="kyc-live-primary" type="button" id="nextLiveStep" hidden disabled>Continue</button>
+    <button class="kyc-live-secondary" type="button" id="cancelLiveCheck">Cancel</button>
+  </div>
+</dialog>
+
 <div class="kyc-slot">
   <label><input type="checkbox" name="rules_accepted" value="1" required> I agree to the Mekenet Ekub Rules.</label>
   <p class="kyc-note" lang="am">በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡</p>
 </div>
 <button class="btn">Submit KYC</button>
 </form>
-{% endif %}<script src="{{url_for('static', filename: 'js/kyc-uploads.js')}}?v=1" defer></script></div>{% endblock %}
+{% endif %}<script src="{{url_for('static', filename: 'js/kyc-uploads.js')}}?v=1" defer></script>
+<script src="{{url_for('static', filename: 'js/kyc-live-check.js')}}?v=1" defer></script></div>{% endblock %}

@@ -542,13 +542,14 @@ class WebsiteController
                 $dobErrors=\DateTimeImmutable::getLastErrors();
                 if(!$parsedDob || ($dobErrors!==false && ($dobErrors['warning_count']>0 || $dobErrors['error_count']>0)) || $parsedDob->format('Y-m-d')!==$rawDob || $parsedDob>=new \DateTimeImmutable('today')) throw new \RuntimeException('Enter a valid date of birth before today.');
                 if((string)$request->input('rules_accepted')!=='1') throw new \RuntimeException('Accept the Mekenet Ekub Rules before submitting.');
+                if((string)$request->input('liveness_verified')!=='1') throw new \RuntimeException('Complete the live face check before submitting.');
                 $base=preg_replace('/\D/','',(string)$user['phone']);
                 $photo=$this->imageUpload($request->file('personal_photo'),'personal_photo',$name.'_'.$base.'_photo'); if($photo)$saved[]=$photo;
                 $front=$this->imageUpload($request->file('id_front'),'id_passport',$name.'_'.$base.($idType==='Passport'?'_passport':'_id-front')); if($front)$saved[]=$front;
                 $back=$idType==='National ID' ? $this->imageUpload($request->file('id_back'),'id_passport',$name.'_'.$base.'_id-back') : null; if($back)$saved[]=$back;
                 if(!$photo) throw new \RuntimeException('Personal photo is required.');
                 if(!$front || ($idType==='National ID' && !$back)) throw new \RuntimeException($idType==='National ID'?'National ID requires both the front and back images.':'Passport requires one image.');
-                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$parsedDob->format('Y-m-d'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>false,'liveness_video'=>null,'video_agreement'=>'','rules_accepted'=>true,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
+                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$parsedDob->format('Y-m-d'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>'','rules_accepted'=>true,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
                 DB::table('users')->where('id',$user['id'])->update(['kyc_status'=>'pending']);
                 $this->flash('KYC submitted. Please wait for approval.','success'); return $this->go('kyc');
             } catch(Throwable $e) { foreach($saved as $file) app(UploadStorage::class)->delete($file); $this->flash($e->getMessage(),'error'); }
