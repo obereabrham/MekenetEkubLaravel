@@ -30,14 +30,14 @@
 <div class="kyc-slot" data-slot>
   <label id="frontLabel">National ID &ndash; Front</label>
   <div class="kyc-slot-btns"><button type="button" data-mode="upload">&#11014; Upload</button><button type="button" data-mode="camera">&#128247; Take Photo</button></div>
-  <input class="kyc-file" type="file" name="id_front" accept="image/*,.pdf" data-capture="environment" data-kind="image" id="frontInput">
+  <input class="kyc-file" type="file" name="id_front" accept="image/*" data-capture="environment" data-kind="image" id="frontInput">
   <div class="kyc-preview"></div>
 </div>
 
 <div class="kyc-slot" data-slot id="backSlot">
   <label>National ID &ndash; Back</label>
   <div class="kyc-slot-btns"><button type="button" data-mode="upload">&#11014; Upload</button><button type="button" data-mode="camera">&#128247; Take Photo</button></div>
-  <input class="kyc-file" type="file" name="id_back" accept="image/*,.pdf" data-capture="environment" data-kind="image" id="backInput">
+  <input class="kyc-file" type="file" name="id_back" accept="image/*" data-capture="environment" data-kind="image" id="backInput">
   <div class="kyc-preview"></div>
 </div>
 
@@ -47,4 +47,4 @@
 </div>
 <button class="btn">Submit KYC</button>
 </form>
-{% endif %}</div>{% endblock %}
+{% endif %}<script src="{{url_for('static', filename: 'js/kyc-uploads.js')}}?v=1" defer></script></div>{% endblock %}
