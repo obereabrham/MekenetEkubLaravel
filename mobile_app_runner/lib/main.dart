@@ -1,15 +1,21 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
+import 'app_lock.dart';
 import 'agreement_video_capture_page.dart';
 import 'liveness_capture_page.dart';
+import 'merchant_center_page.dart';
+import 'merchant_map_preview.dart';
+import 'app_translation.dart';
+
+typedef Text = LocalizedText;
 
 const bg = Color(0xFF0B1110);
 const panel = Color(0xFF151D1B);
@@ -70,10 +76,15 @@ extension _MekenetPaletteContext on BuildContext {
 
 class _DateOfBirthInputFormatter extends TextInputFormatter {
   @override
-  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
     var digits = newValue.text.replaceAll(RegExp(r'\D'), '');
     final oldDigits = oldValue.text.replaceAll(RegExp(r'\D'), '');
-    if (newValue.text.length < oldValue.text.length && digits.length == oldDigits.length && digits.isNotEmpty) {
+    if (newValue.text.length < oldValue.text.length &&
+        digits.length == oldDigits.length &&
+        digits.isNotEmpty) {
       digits = digits.substring(0, digits.length - 1);
     }
     if (digits.length > 8) return oldValue;
@@ -92,12 +103,15 @@ class _DateOfBirthInputFormatter extends TextInputFormatter {
 }
 
 String? _validateDateOfBirth(String? value) {
-  final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch((value ?? '').trim());
+  final match = RegExp(
+    r'^(\d{4})-(\d{2})-(\d{2})$',
+  ).firstMatch((value ?? '').trim());
   if (match == null) return 'Enter the date as YYYY-MM-DD.';
   final year = int.parse(match.group(1)!);
   final month = int.parse(match.group(2)!);
   final day = int.parse(match.group(3)!);
-  if (year < 1900 || month < 1 || month > 12) return 'Enter a valid year and month.';
+  if (year < 1900 || month < 1 || month > 12)
+    return 'Enter a valid year and month.';
   final date = DateTime(year, month, day);
   if (day < 1 || date.year != year || date.month != month || date.day != day) {
     return 'Enter a real calendar date.';
@@ -209,36 +223,202 @@ class MekenetApp extends StatefulWidget {
   State<MekenetApp> createState() => _MekenetAppState();
 }
 
-class _MekenetAppState extends State<MekenetApp> {
+class _MekenetAppState extends State<MekenetApp> with WidgetsBindingObserver {
   Map<String, dynamic>? user;
   bool loading = true;
+  bool locked = false;
   ThemeMode themeMode = ThemeMode.light;
+  String languageCode = 'EN';
+  AppLockConfig appLockConfig = const AppLockConfig();
   final themeStorage = const FlutterSecureStorage();
+  Timer? _sessionTimeoutTimer;
+  static const _sessionStartedKey = 'mekenet_session_started_ms';
+  static const _backgroundedAtKey = 'mekenet_backgrounded_at_ms';
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _restore();
   }
 
   Future<void> _restore() async {
     try {
       final savedTheme = await themeStorage.read(key: 'mekenet_theme_mode');
+      languageCode = await themeStorage.read(key: 'mekenet_language') ?? 'EN';
+      if (!const {'AM', 'ORO', 'EN'}.contains(languageCode))
+        languageCode = 'EN';
+      setMekenetLanguage(languageCode);
       if (savedTheme == 'light') themeMode = ThemeMode.light;
       if (savedTheme == 'dark') themeMode = ThemeMode.dark;
+      appLockConfig = await AppLockConfig.read();
     } catch (_) {}
-    if (await widget.api.hasToken()) {
-      try {
-        user = _map(
-          (await widget.api
-              .get('/me')
-              .timeout(const Duration(seconds: 8)))['user'],
+    final hasToken = await widget.api.hasToken();
+    if (hasToken) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      var started = int.tryParse(
+        await themeStorage.read(key: _sessionStartedKey) ?? '',
+      );
+      if (started == null) {
+        started = now;
+        await themeStorage.write(
+          key: _sessionStartedKey,
+          value: started.toString(),
         );
-      } catch (_) {
-        await widget.api.clearToken();
       }
+      _scheduleSessionExpiry(started);
+      if (now - started >= const Duration(hours: 5).inMilliseconds) {
+        await _forceSignInAgain();
+      } else {
+        final backgrounded = int.tryParse(
+          await themeStorage.read(key: _backgroundedAtKey) ?? '',
+        );
+        if (appLockConfig.enabled &&
+            appLockConfig.timeoutMinutes >= 0 &&
+            backgrounded != null &&
+            now - backgrounded >=
+                Duration(
+                  minutes: appLockConfig.timeoutMinutes,
+                ).inMilliseconds) {
+          locked = true;
+        }
+        await themeStorage.delete(key: _backgroundedAtKey);
+        try {
+          await widget.api.post('/analytics/visit', authenticated: true);
+        } catch (_) {}
+      }
+      if (await widget.api.hasToken()) {
+        try {
+          user = _map(
+            (await widget.api
+                .get('/me')
+                .timeout(const Duration(seconds: 8)))['user'],
+          );
+        } catch (_) {
+          await widget.api.clearToken();
+        }
+      }
+    } else {
+      await themeStorage.delete(key: _backgroundedAtKey);
+      try {
+        await widget.api.post('/analytics/visit', authenticated: false);
+      } catch (_) {}
     }
     if (mounted) setState(() => loading = false);
+  }
+
+  Future<void> _saveLanguage(String value) async {
+    final normalized = const {'AM', 'ORO', 'EN'}.contains(value) ? value : 'EN';
+    setMekenetLanguage(normalized);
+    if (mounted) setState(() => languageCode = normalized);
+    await themeStorage.write(key: 'mekenet_language', value: normalized);
+  }
+
+  Future<void> _forceSignInAgain() async {
+    _sessionTimeoutTimer?.cancel();
+    try {
+      await widget.api.post('/auth/logout');
+    } catch (_) {}
+    await widget.api.clearToken();
+    await themeStorage.delete(key: _sessionStartedKey);
+    await themeStorage.delete(key: _backgroundedAtKey);
+    user = null;
+    locked = false;
+  }
+
+  void _scheduleSessionExpiry(int startedAtMilliseconds) {
+    _sessionTimeoutTimer?.cancel();
+    final elapsed =
+        DateTime.now().millisecondsSinceEpoch - startedAtMilliseconds;
+    final remaining =
+        const Duration(hours: 5) - Duration(milliseconds: elapsed);
+    _sessionTimeoutTimer = Timer(
+      remaining.isNegative ? Duration.zero : remaining,
+      () {
+        if (!mounted) return;
+        unawaited(() async {
+          await _forceSignInAgain();
+          if (mounted) setState(() {});
+        }());
+      },
+    );
+  }
+
+  Future<void> _handleResume() async {
+    if (user == null) return;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final started = int.tryParse(
+      await themeStorage.read(key: _sessionStartedKey) ?? '',
+    );
+    if (started != null &&
+        now - started >= const Duration(hours: 5).inMilliseconds) {
+      await _forceSignInAgain();
+      if (mounted) setState(() {});
+      return;
+    }
+    final backgrounded = int.tryParse(
+      await themeStorage.read(key: _backgroundedAtKey) ?? '',
+    );
+    if (appLockConfig.enabled &&
+        appLockConfig.timeoutMinutes >= 0 &&
+        backgrounded != null &&
+        now - backgrounded >=
+            Duration(minutes: appLockConfig.timeoutMinutes).inMilliseconds &&
+        mounted) {
+      setState(() => locked = true);
+    }
+    await themeStorage.delete(key: _backgroundedAtKey);
+    try {
+      await widget.api.post('/analytics/visit', authenticated: true);
+    } catch (_) {}
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      if (user == null) return;
+      final now = DateTime.now().millisecondsSinceEpoch;
+      themeStorage.write(key: _backgroundedAtKey, value: now.toString());
+      if (appLockConfig.enabled &&
+          appLockConfig.timeoutMinutes == 0 &&
+          mounted) {
+        setState(() => locked = true);
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      unawaited(_handleResume());
+    }
+  }
+
+  Future<void> _saveAppLockConfig(AppLockConfig config) async {
+    await config.write();
+    if (!mounted) return;
+    setState(() {
+      appLockConfig = config;
+      if (!config.enabled) locked = false;
+    });
+  }
+
+  Future<void> _signedIn(Map<String, dynamic> value) async {
+    final startedAt = DateTime.now().millisecondsSinceEpoch;
+    await themeStorage.write(
+      key: _sessionStartedKey,
+      value: startedAt.toString(),
+    );
+    await themeStorage.delete(key: _backgroundedAtKey);
+    _scheduleSessionExpiry(startedAt);
+    if (mounted)
+      setState(() {
+        user = value;
+        locked = false;
+      });
+  }
+
+  @override
+  void dispose() {
+    _sessionTimeoutTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _toggleTheme() async {
@@ -253,11 +433,18 @@ class _MekenetAppState extends State<MekenetApp> {
   }
 
   Future<void> _signOut() async {
+    _sessionTimeoutTimer?.cancel();
     try {
       await widget.api.post('/auth/logout');
     } catch (_) {}
     await widget.api.clearToken();
-    if (mounted) setState(() => user = null);
+    await themeStorage.delete(key: _sessionStartedKey);
+    await themeStorage.delete(key: _backgroundedAtKey);
+    if (mounted)
+      setState(() {
+        user = null;
+        locked = false;
+      });
   }
 
   @override
@@ -273,16 +460,28 @@ class _MekenetAppState extends State<MekenetApp> {
           : user == null
           ? AuthPage(
               api: widget.api,
-              onSignedIn: (value) => setState(() => user = value),
+              onSignedIn: _signedIn,
               isDark: themeMode == ThemeMode.dark,
               onToggleTheme: _toggleTheme,
+            )
+          : locked
+          ? AppLockGate(
+              config: appLockConfig,
+              onUnlock: () {
+                if (mounted) setState(() => locked = false);
+              },
+              onSignInAgain: () => _forceSignInAgain(),
             )
           : MemberPage(
               api: widget.api,
               user: user!,
               onSignOut: _signOut,
+              appLockConfig: appLockConfig,
+              onAppLockConfigChanged: _saveAppLockConfig,
               themeMode: themeMode,
               onToggleTheme: _toggleTheme,
+              languageCode: languageCode,
+              onLanguageChanged: _saveLanguage,
             ),
     );
   }
@@ -1345,14 +1544,22 @@ class MemberPage extends StatefulWidget {
     required this.api,
     required this.user,
     required this.onSignOut,
+    required this.appLockConfig,
+    required this.onAppLockConfigChanged,
     required this.themeMode,
     required this.onToggleTheme,
+    required this.languageCode,
+    required this.onLanguageChanged,
   });
   final ApiClient api;
   final Map<String, dynamic> user;
   final Future<void> Function() onSignOut;
+  final AppLockConfig appLockConfig;
+  final Future<void> Function(AppLockConfig) onAppLockConfigChanged;
   final ThemeMode themeMode;
   final Future<void> Function() onToggleTheme;
+  final String languageCode;
+  final Future<void> Function(String) onLanguageChanged;
 
   @override
   State<MemberPage> createState() => _MemberPageState();
@@ -1402,8 +1609,10 @@ class _MemberPageState extends State<MemberPage> with WidgetsBindingObserver {
     try {
       await _phoneNotificationChannel.invokeMethod<bool>('show', {
         'id': _int(row['id']),
-        'title': (row['title'] ?? 'Mekenet Ekub update').toString(),
-        'body': (row['body'] ?? '').toString(),
+        'title': mekenetTranslate(
+          (row['title'] ?? 'Mekenet Ekub update').toString(),
+        ),
+        'body': mekenetTranslate((row['body'] ?? '').toString()),
       });
     } on PlatformException catch (_) {
       // Keep in-app notifications available if the OS blocks tray alerts.
@@ -1619,8 +1828,12 @@ class _MemberPageState extends State<MemberPage> with WidgetsBindingObserver {
         api: widget.api,
         user: widget.user,
         onSignOut: widget.onSignOut,
+        appLockConfig: widget.appLockConfig,
+        onAppLockConfigChanged: widget.onAppLockConfigChanged,
         isDark: widget.themeMode == ThemeMode.dark,
         onToggleTheme: widget.onToggleTheme,
+        languageCode: widget.languageCode,
+        onLanguageChanged: widget.onLanguageChanged,
       ),
     ];
     return Scaffold(
@@ -1719,21 +1932,6 @@ class _MemberPageState extends State<MemberPage> with WidgetsBindingObserver {
         ],
       ),
       body: IndexedStack(index: selected, children: pages),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: SizedBox(
-        width: 62,
-        height: 62,
-        child: FloatingActionButton(
-          heroTag: 'create-ekub-tab',
-          tooltip: 'Create an Ekub',
-          onPressed: _openCreateEkub,
-          backgroundColor: green,
-          foregroundColor: Colors.white,
-          elevation: 5,
-          shape: const CircleBorder(),
-          child: const Icon(Icons.add_rounded, size: 34),
-        ),
-      ),
       bottomNavigationBar: SafeArea(
         top: false,
         minimum: const EdgeInsets.fromLTRB(12, 0, 12, 6),
@@ -1773,7 +1971,23 @@ class _MemberPageState extends State<MemberPage> with WidgetsBindingObserver {
                   onTap: () => _selectTab(1),
                 ),
               ),
-              const SizedBox(width: 66),
+              SizedBox(
+                width: 62,
+                child: Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, -9),
+                    child: FloatingActionButton(
+                      heroTag: 'member-bottom-apply-ekub',
+                      tooltip: 'Apply to create an Ekub',
+                      onPressed: _openCreateEkub,
+                      backgroundColor: green,
+                      foregroundColor: Colors.white,
+                      elevation: 5,
+                      child: const Icon(Icons.add_rounded, size: 29),
+                    ),
+                  ),
+                ),
+              ),
               Expanded(
                 child: _MemberNavItem(
                   icon: Icons.savings_outlined,
@@ -1887,7 +2101,7 @@ class _NewEkubsDialog extends StatelessWidget {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              '${_money(item['base_amount'])} ETB · ${item['frequency'] ?? 'Flexible'}',
+                              '${_money(item['base_amount'])} · ${item['frequency'] ?? 'Flexible'}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
@@ -2540,6 +2754,7 @@ class _DashboardViewState extends State<DashboardView> {
   double dueTotal = 0;
   double pendingTotal = 0;
   List<dynamic> featured = [];
+  List<dynamic> joinedEkubs = [];
   final Set<int> joiningIds = {};
 
   @override
@@ -2578,6 +2793,7 @@ class _DashboardViewState extends State<DashboardView> {
       dueTotal = due;
       pendingTotal = pending;
       featured = available;
+      joinedEkubs = joined;
     } on ApiException catch (exception) {
       error = exception.message;
     }
@@ -2723,6 +2939,25 @@ class _DashboardViewState extends State<DashboardView> {
           if (error != null) ...[
             const SizedBox(height: 12),
             _Retry(text: error!, onRetry: _load),
+          ],
+          if (!loading && joinedEkubs.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Your joined Ekubs',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                TextButton(
+                  onPressed: () => widget.onNavigate(2),
+                  child: const Text('View all'),
+                ),
+              ],
+            ),
+            _ekubRow(joinedEkubs.map(_map).toList()),
           ],
           const SizedBox(height: 20),
           if (loading || hostedFeatured.isNotEmpty) ...[
@@ -3163,6 +3398,14 @@ class _HomeEkubCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final images = item['images'] as List? ?? [];
+    final merchantAd = item['merchant_ad'] is Map
+        ? item['merchant_ad'] as Map
+        : const <String, dynamic>{};
+    final merchantImages = merchantAd['images'] as List? ?? const [];
+    final merchantBanner =
+        item['is_merchant'] == true && merchantImages.isNotEmpty
+        ? merchantImages.first.toString()
+        : null;
     final isItem = item['is_item'] == true;
     final capacity = _num(item['capacity']);
     final progress = capacity <= 0
@@ -3179,7 +3422,16 @@ class _HomeEkubCard extends StatelessWidget {
         children: [
           SizedBox(
             height: 112,
-            child: !isItem
+            child: merchantBanner != null
+                ? Image.network(
+                    merchantBanner,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _CategoryArtwork(
+                      category: (item['category'] ?? '').toString(),
+                      height: 112,
+                    ),
+                  )
+                : !isItem
                 ? _CategoryArtwork(
                     category: (item['category'] ?? '').toString(),
                     height: 112,
@@ -4093,22 +4345,10 @@ class _EkubDetailsState extends State<EkubDetails> {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      _Info(
-                        label: 'Due',
-                        value: '${_money(period['due'])} ETB',
-                      ),
-                      _Info(
-                        label: 'Paid',
-                        value: '${_money(period['paid'])} ETB',
-                      ),
-                      _Info(
-                        label: 'Pending',
-                        value: '${_money(period['pending'])} ETB',
-                      ),
-                      _Info(
-                        label: 'Remaining',
-                        value: '${_money(remaining)} ETB',
-                      ),
+                      _Info(label: 'Due', value: _money(period['due'])),
+                      _Info(label: 'Paid', value: _money(period['paid'])),
+                      _Info(label: 'Pending', value: _money(period['pending'])),
+                      _Info(label: 'Remaining', value: _money(remaining)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -4153,7 +4393,7 @@ class _EkubDetailsState extends State<EkubDetails> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    'Submitted ${_money(payment['amount'])} ETB${currencyAmount == null || currency == 'ETB' ? '' : ' · ${_paymentUsdt(currencyAmount)} $currency'}',
+                                    'Submitted ${_money(payment['amount'])}${currencyAmount == null || currency == 'ETB' ? '' : ' · ${_paymentUsdt(currencyAmount)} $currency'}',
                                     style: TextStyle(
                                       color: context.palette.muted,
                                       fontSize: 12,
@@ -4161,7 +4401,7 @@ class _EkubDetailsState extends State<EkubDetails> {
                                   ),
                                   if (_num(payment['approved_amount']) > 0)
                                     Text(
-                                      'Approved ${_money(payment['approved_amount'])} ETB',
+                                      'Approved ${_money(payment['approved_amount'])}',
                                       style: TextStyle(
                                         color: context.palette.muted,
                                         fontSize: 12,
@@ -4169,7 +4409,7 @@ class _EkubDetailsState extends State<EkubDetails> {
                                     ),
                                   if (_num(payment['penalty']) > 0)
                                     Text(
-                                      'Late payment fee ${_money(payment['penalty'])} ETB',
+                                      'Late payment fee ${_money(payment['penalty'])}',
                                       style: TextStyle(
                                         color: context.palette.muted,
                                         fontSize: 12,
@@ -4257,6 +4497,129 @@ class _EkubDetailsState extends State<EkubDetails> {
     );
   }
 
+  Future<void> _openMerchantUrl(String value) async {
+    final uri = Uri.tryParse(value);
+    if (uri == null || !uri.hasScheme) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  Widget _merchantAdCard(Map<String, dynamic> item) {
+    final ad = _map(item['merchant_ad']);
+    final merchant = _map(item['merchant']);
+    if (ad.isEmpty && merchant.isEmpty) return const SizedBox.shrink();
+    final images = ad['images'] as List? ?? const [];
+    final website = (ad['website_url'] ?? merchant['website_url'] ?? '')
+        .toString();
+    final latitude = ad['latitude'] ?? merchant['location_lat'];
+    final longitude = ad['longitude'] ?? merchant['location_lng'];
+    final mapLatitude = double.tryParse('$latitude');
+    final mapLongitude = double.tryParse('$longitude');
+    final location =
+        (ad['location_name'] ??
+                merchant['address'] ??
+                merchant['business_name'] ??
+                'Merchant location')
+            .toString();
+    final mapUrl = (ad['map_url'] ?? '').toString();
+    return Card(
+      margin: const EdgeInsets.only(top: 16),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: green.withAlpha(24),
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(Icons.storefront_outlined, color: green),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        (ad['title'] ?? merchant['business_name'] ?? 'Merchant')
+                            .toString(),
+                        style: const TextStyle(fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        (merchant['category'] ?? 'Verified merchant')
+                            .toString(),
+                        style: TextStyle(color: context.palette.muted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if ((ad['description'] ?? '').toString().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(ad['description'].toString()),
+            ],
+            if (images.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 158,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: images.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 9),
+                  itemBuilder: (context, index) => ClipRRect(
+                    borderRadius: BorderRadius.circular(13),
+                    child: Image.network(
+                      images[index].toString(),
+                      width: 220,
+                      height: 158,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 220,
+                        color: context.palette.track,
+                        child: const Icon(Icons.image_not_supported_outlined),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            if (website.isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => _openMerchantUrl(website),
+                  icon: const Icon(Icons.open_in_new_rounded),
+                  label: Text(
+                    'Visit $website',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            if (mapLatitude != null && mapLongitude != null)
+              MerchantMapPreview(
+                latitude: mapLatitude,
+                longitude: mapLongitude,
+                location: location,
+                height: 160,
+                onTap: () => _openMerchantUrl(
+                  mapUrl.isNotEmpty
+                      ? mapUrl
+                      : 'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading)
@@ -4269,11 +4632,16 @@ class _EkubDetailsState extends State<EkubDetails> {
     final item = _map(result!['ekub']);
     final membership = _map(result!['membership']);
     final joined = membership.isNotEmpty;
+    final joinRequest = _map(result!['join_request']);
     final images = item['images'] as List? ?? [];
     final members = result!['members'] as List? ?? [];
     final winners = result!['winners'] as List? ?? [];
     final canJoin =
-        !joined && item['is_full'] != true && item['status'] == 'open';
+        !joined &&
+        joinRequest['status'] != 'pending' &&
+        joinRequest['status'] != 'approved' &&
+        item['is_full'] != true &&
+        item['status'] == 'open';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Ekub details')),
@@ -4323,6 +4691,7 @@ class _EkubDetailsState extends State<EkubDetails> {
               context,
             ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
+          _merchantAdCard(item),
           const SizedBox(height: 5),
           Text(
             (item['category'] ?? '').toString() +
@@ -4373,6 +4742,14 @@ class _EkubDetailsState extends State<EkubDetails> {
             ),
             _myPaymentDetails(),
           ],
+          if (joinRequest['status'] == 'pending') ...[
+            const SizedBox(height: 10),
+            const _Message(
+              text:
+                  'Your request is waiting for merchant approval. Payments will be available after approval.',
+              isError: false,
+            ),
+          ],
           if (error != null) ...[
             const SizedBox(height: 12),
             _Message(text: error!, isError: true),
@@ -4382,6 +4759,11 @@ class _EkubDetailsState extends State<EkubDetails> {
             const FilledButton(
               onPressed: null,
               child: Text('You joined this Ekub'),
+            )
+          else if (joinRequest['status'] == 'pending')
+            const FilledButton(
+              onPressed: null,
+              child: Text('Waiting for merchant approval'),
             )
           else if (canJoin)
             FilledButton.icon(
@@ -4422,9 +4804,17 @@ class _EkubDetailsState extends State<EkubDetails> {
                               ' ' +
                               (member['last_name'] ?? '').toString())
                           .trim();
+                  final profilePicture = (member['profile_picture_url'] ?? '')
+                      .toString();
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: context.palette.panel,
+                      foregroundImage: profilePicture.isEmpty
+                          ? null
+                          : NetworkImage(profilePicture),
+                      onForegroundImageError: profilePicture.isEmpty
+                          ? null
+                          : (_, __) {},
                       child: Text(name.isEmpty ? 'M' : name[0].toUpperCase()),
                     ),
                     title: Text(
@@ -4587,6 +4977,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
     var dueTotal = 0.0;
     var reviewTotal = 0.0;
     var duePeriods = 0;
+    Map<String, dynamic>? firstPayablePeriod;
     if (selectedGroup != null) {
       final group = selectedGroup;
       for (final value in group['periods'] as List? ?? const []) {
@@ -4596,6 +4987,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
         if (period['can_pay'] == true) {
           dueTotal += _num(period['available_to_pay']);
           duePeriods++;
+          firstPayablePeriod ??= period;
         }
       }
     }
@@ -4727,18 +5119,18 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
               children: [
                 _PaymentAmount(
                   label: 'DUE',
-                  value: _money(period['required']) + ' ETB',
+                  value: _money(period['required']),
                   color: sky,
                 ),
                 _PaymentAmount(
                   label: 'PAID',
-                  value: _money(period['paid']) + ' ETB',
+                  value: _money(period['paid']),
                   color: green,
                 ),
                 if (_num(period['pending']) > 0)
                   _PaymentAmount(
                     label: 'IN REVIEW',
-                    value: _money(period['pending']) + ' ETB',
+                    value: _money(period['pending']),
                     color: const Color(0xFFE5A83B),
                   ),
               ],
@@ -4781,7 +5173,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                           ),
                         ),
                         Text(
-                          _money(payment['amount']) + ' ETB',
+                          _money(payment['amount']),
                           style: const TextStyle(fontWeight: FontWeight.w900),
                         ),
                       ],
@@ -4885,7 +5277,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            _money(period['available_to_pay']) + ' ETB',
+                            _money(period['available_to_pay']),
                             style: const TextStyle(fontWeight: FontWeight.w900),
                           ),
                         ),
@@ -4924,7 +5316,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                       ),
                     ),
                     Text(
-                      _money(winner['net_amount']) + ' ETB',
+                      _money(winner['net_amount']),
                       style: const TextStyle(
                         color: green,
                         fontWeight: FontWeight.w900,
@@ -5226,7 +5618,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                                 FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
-                                    _money(dueTotal) + ' ETB',
+                                    _money(dueTotal),
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 22,
@@ -5249,6 +5641,37 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
+                          if (firstPayablePeriod != null) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: () => _pay(
+                                  _int(selectedEkub!['id']),
+                                  _int(firstPayablePeriod!['period_no']),
+                                  (selectedEkub!['name'] ?? 'Ekub').toString(),
+                                  _num(firstPayablePeriod!['available_to_pay']),
+                                ),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: green,
+                                  minimumSize: const Size(0, 48),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.wallet_rounded),
+                                label: Text(
+                                  'Pay period ${_int(firstPayablePeriod!['period_no'])} · ${_money(firstPayablePeriod!['available_to_pay'])}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -5296,7 +5719,9 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                           ),
                         ),
                         Text(
-                          '${_int(selectedEkub['duration'])} periods',
+                          _int(selectedEkub['duration']) == 1
+                              ? '1 period'
+                              : '${_int(selectedEkub['duration'])} periods',
                           style: TextStyle(
                             color: context.palette.muted,
                             fontSize: 12,
@@ -5311,7 +5736,7 @@ class _StatusViewState extends State<StatusView> with WidgetsBindingObserver {
                       text: 'No active Ekubs to show payment status for.',
                     )
                   else if (selectedEkub != null)
-                    ekubCard(selectedEkub),
+                    ekubCard(selectedGroup!),
                 ],
               ),
             ),
@@ -5671,7 +6096,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                                                 .toString()
                                                 .isNotEmpty)
                                               Text(
-                                                'Account holder: ${method['account_holder']}',
+                                                'Account holder name: ${method['account_holder']}',
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   color: palette.muted,
@@ -5765,8 +6190,8 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                             transactionCheckMessage = null;
                             error = null;
                           }),
-                          decoration: const InputDecoration(
-                            labelText: 'Transaction ID / reference',
+                          decoration: InputDecoration(
+                            labelText: mekenetTranslate('Transaction ID / reference'),
                             prefixIcon: Icon(Icons.tag_rounded),
                           ),
                         ),
@@ -5907,14 +6332,22 @@ class ProfileView extends StatefulWidget {
     required this.api,
     required this.user,
     required this.onSignOut,
+    required this.appLockConfig,
+    required this.onAppLockConfigChanged,
     required this.isDark,
     required this.onToggleTheme,
+    required this.languageCode,
+    required this.onLanguageChanged,
   });
   final ApiClient api;
   final Map<String, dynamic> user;
   final Future<void> Function() onSignOut;
+  final AppLockConfig appLockConfig;
+  final Future<void> Function(AppLockConfig) onAppLockConfigChanged;
   final bool isDark;
   final Future<void> Function() onToggleTheme;
+  final String languageCode;
+  final Future<void> Function(String) onLanguageChanged;
 
   @override
   State<ProfileView> createState() => _ProfileViewState();
@@ -5937,6 +6370,15 @@ class _ProfileViewState extends State<ProfileView> {
   }
 
   Future<void> _open(BuildContext context, String feature) async {
+    if (feature == 'merchant') {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => MerchantCenterPage(api: widget.api),
+        ),
+      );
+      if (mounted) await _refresh();
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ProfileFeaturePage(
@@ -5948,6 +6390,69 @@ class _ProfileViewState extends State<ProfileView> {
       ),
     );
     if (mounted) await _refresh();
+  }
+
+  Future<void> _openAppLock(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => AppLockSettingsPage(
+          initial: widget.appLockConfig,
+          onSave: widget.onAppLockConfigChanged,
+        ),
+      ),
+    );
+  }
+
+  String _languageName(String code) => switch (code) {
+    'AM' => 'አማርኛ · አማ',
+    'ORO' => 'Afaan Oromoo · ORO',
+    _ => 'English · EN',
+  };
+
+  Future<void> _chooseLanguage(BuildContext context) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('App language'),
+              subtitle: Text('Choose your preferred language'),
+            ),
+            for (final option in const [
+              ('AM', 'አማ', 'Amharic'),
+              ('ORO', 'ORO', 'Afaan Oromoo'),
+              ('EN', 'EN', 'English'),
+            ])
+              RadioListTile<String>(
+                value: option.$1,
+                groupValue: widget.languageCode,
+                title: Text(option.$2),
+                subtitle: Text(option.$3),
+                onChanged: (value) => Navigator.of(sheetContext).pop(value),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (choice != null) await widget.onLanguageChanged(choice);
+  }
+
+  Future<void> _rateApp() async {
+    final market = Uri.parse('market://details?id=et.mekenet.mekenet_mobile');
+    final web = Uri.parse(
+      'https://play.google.com/store/apps/details?id=et.mekenet.mekenet_mobile',
+    );
+    try {
+      if (!await launchUrl(market, mode: LaunchMode.externalApplication)) {
+        await launchUrl(web, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      await launchUrl(web, mode: LaunchMode.externalApplication);
+    }
   }
 
   Widget _tile(
@@ -5964,6 +6469,12 @@ class _ProfileViewState extends State<ProfileView> {
       onTap: () {
         if (feature == 'appearance') {
           widget.onToggleTheme();
+        } else if (feature == 'app_lock') {
+          _openAppLock(context);
+        } else if (feature == 'rate_app') {
+          _rateApp();
+        } else if (feature == 'language') {
+          _chooseLanguage(context);
         } else {
           _open(context, feature);
         }
@@ -6236,6 +6747,13 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           _tile(
             context,
+            Icons.lock_outline_rounded,
+            'App lock',
+            'PIN, pattern, biometric and lock timer',
+            'app_lock',
+          ),
+          _tile(
+            context,
             widget.isDark
                 ? Icons.dark_mode_outlined
                 : Icons.light_mode_outlined,
@@ -6246,10 +6764,26 @@ class _ProfileViewState extends State<ProfileView> {
           ),
           _tile(
             context,
+            Icons.translate_rounded,
+            'Language',
+            _languageName(widget.languageCode) + ' · Tap to change',
+            'language',
+            iconColor: blue,
+          ),
+          _tile(
+            context,
             Icons.add_business_outlined,
             'Create an Ekub',
             'Apply and track your application',
             'applications',
+          ),
+          _tile(
+            context,
+            Icons.storefront_outlined,
+            'Merchant account',
+            'Apply with TIN or manage your hosted Ekubs',
+            'merchant',
+            iconColor: blue,
           ),
           _tile(
             context,
@@ -6298,6 +6832,14 @@ class _ProfileViewState extends State<ProfileView> {
             'Contact support',
             'Get help with your account',
             'contact',
+            iconColor: blue,
+          ),
+          _tile(
+            context,
+            Icons.star_rate_rounded,
+            'Rate the app',
+            'Write a review on Google Play',
+            'rate_app',
             iconColor: blue,
           ),
         ]),
@@ -6352,9 +6894,9 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
       idType = 'National ID',
       gender = 'Male',
       reason = 'I no longer need the service';
-  XFile? photo, front, back, video, profilePicture;
-  int? videoDurationSeconds;
-  bool livenessPassed = false;
+  XFile? photo, front, back, agreementVideo, profilePicture;
+  int? agreementVideoDurationSeconds;
+  bool livenessPassed = false, kycRulesAccepted = false;
   bool loading = true, busy = false, emailCodeSent = false;
   bool emailChangeCodeSent = false;
   String? emailChangeRequestedFor;
@@ -6368,7 +6910,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     final lastDate = today.subtract(const Duration(days: 1));
     final existing = DateTime.tryParse(field('dob').text);
     final fallback = DateTime(today.year - 18, today.month, today.day);
-    final initialDate = existing != null &&
+    final initialDate =
+        existing != null &&
             !existing.isAfter(lastDate) &&
             !existing.isBefore(DateTime(1900))
         ? existing
@@ -6486,6 +7029,28 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
 
   Future<void> _paymentAdd() async {
     if (!form.currentState!.validate()) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        icon: const Icon(Icons.shield_outlined, color: green),
+        title: const Text('Save payout account?'),
+        content: const Text(
+          'Authorized administrators will use this account to send your Ekub payouts. Check the account details before saving.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(c, true),
+            icon: const Icon(Icons.lock_outline_rounded),
+            label: const Text('Save account'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
     final saved = await _post('/profile/payment-methods', {
       'bank_name': bank,
       'account_name': field('account_name').text.trim(),
@@ -6494,6 +7059,32 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     if (saved) {
       field('account_name').clear();
       field('account_number').clear();
+    }
+  }
+
+  Future<void> _makeDefaultPayment(int id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        icon: const Icon(Icons.shield_outlined, color: green),
+        title: const Text('Change default payout account?'),
+        content: const Text(
+          'Future winner payouts will use this account by default.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _post('/profile/payment-methods/$id/default', {});
     }
   }
 
@@ -6546,22 +7137,33 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   }
 
   Future<void> _pick(String key) async {
-    if (key == 'liveness_video') {
+    if (key == 'liveness_check') {
+      if (photo == null) {
+        _snack(
+          context,
+          'Add your personal photo before starting the live face check.',
+        );
+        return;
+      }
       final passed = await Navigator.of(context).push<bool>(
-        MaterialPageRoute(builder: (_) => const LivenessCapturePage()),
+        MaterialPageRoute(
+          builder: (_) => LivenessCapturePage(referencePhotoPath: photo!.path),
+        ),
       );
       if (passed == true && mounted) setState(() => livenessPassed = true);
       return;
     }
-    final isVideo = key == 'video';
-    if (isVideo) {
-      final recordedVideo = await Navigator.of(context).push<AgreementVideoCaptureResult?>(
-        MaterialPageRoute(builder: (_) => const AgreementVideoCapturePage()),
-      );
-      if (recordedVideo != null && mounted) {
+    if (key == 'agreement_video') {
+      final recording = await Navigator.of(context)
+          .push<AgreementVideoCaptureResult>(
+            MaterialPageRoute(
+              builder: (_) => const AgreementVideoCapturePage(),
+            ),
+          );
+      if (recording != null && mounted) {
         setState(() {
-          video = recordedVideo.file;
-          videoDurationSeconds = recordedVideo.durationSeconds;
+          agreementVideo = recording.file;
+          agreementVideoDurationSeconds = recording.durationSeconds;
         });
       }
       return;
@@ -6634,14 +7236,19 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
     }
     if (file == null || !mounted) return;
     if (await file.length() > 1024 * 1024) {
-      _snack(context, 'Each image must be 1 MB or smaller. Choose a smaller image.');
+      _snack(
+        context,
+        'Each image must be 1 MB or smaller. Choose a smaller image.',
+      );
       return;
     }
     setState(() {
-      if (key == 'photo') photo = file;
+      if (key == 'photo') {
+        photo = file;
+        livenessPassed = false;
+      }
       if (key == 'front') front = file;
       if (key == 'back') back = file;
-      if (key == 'video') video = file;
       if (key == 'profile_picture') profilePicture = file;
     });
   }
@@ -6740,14 +7347,27 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         front == null ||
         (idType == 'National ID' && back == null) ||
         !livenessPassed ||
-        video == null ||
-        videoDurationSeconds == null ||
-        videoDurationSeconds! < 5 ||
-        videoDurationSeconds! > 10) {
+        agreementVideo == null ||
+        agreementVideoDurationSeconds == null ||
+        agreementVideoDurationSeconds! < 5 ||
+        agreementVideoDurationSeconds! > 10) {
       _snack(
         context,
-        'Pass the live face check and add the agreement video and required ID documents.',
+        'Complete the live face check and record a 5–10 second agreement video.',
       );
+      return;
+    }
+    for (final image in [photo, front, if (idType == 'National ID') back]) {
+      if (image != null && await image.length() > 1024 * 1024) {
+        _snack(
+          context,
+          'Each KYC image must be 1 MB or smaller. Choose a smaller image.',
+        );
+        return;
+      }
+    }
+    if (!kycRulesAccepted) {
+      _snack(context, 'Accept the Mekenet Ekub Rules before submitting.');
       return;
     }
     setState(() => busy = true);
@@ -6760,14 +7380,15 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
           'gender': gender!,
           'id_type': idType!,
           'id_number': field('id_number').text.trim(),
+          'rules_accepted': '1',
           'liveness_verified': '1',
-          'video_duration_seconds': videoDurationSeconds!.toString(),
+          'video_duration_seconds': agreementVideoDurationSeconds!.toString(),
         },
         files: {
           'personal_photo': photo!.path,
           'id_front': front!.path,
           if (idType == 'National ID') 'id_back': back!.path,
-          'video_agreement': video!.path,
+          'video_agreement': agreementVideo!.path,
         },
       );
       if (mounted)
@@ -6777,9 +7398,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
         photo = null;
         front = null;
         back = null;
+        agreementVideo = null;
+        agreementVideoDurationSeconds = null;
+        kycRulesAccepted = false;
         livenessPassed = false;
-        video = null;
-        videoDurationSeconds = null;
       });
     } on ApiException catch (e) {
       if (mounted) _snack(context, e.message);
@@ -6789,6 +7411,35 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
   }
 
   Future<void> _security(String action, [Map<String, dynamic>? body]) async {
+    if (action == 'send-email-code' || action == 'start-authenticator') {
+      final isEmail = action == 'send-email-code';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          icon: const Icon(Icons.shield_outlined, color: green),
+          title: Text(
+            isEmail ? 'Enable email verification?' : 'Add authenticator?',
+          ),
+          content: Text(
+            isEmail
+                ? 'A code will be sent to ${(result['email_hint'] ?? 'your account email').toString()}. You will need access to this email at sign-in.'
+                : 'You will need the authenticator app to sign in with this method. You can also enable email codes and choose either method at sign-in.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(c, true),
+              icon: const Icon(Icons.lock_outline_rounded),
+              label: const Text('Continue'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     setState(() => busy = true);
     try {
       final r = await widget.api.post('/profile/security/$action', body: body);
@@ -6881,8 +7532,6 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
               child: Icon(
                 file != null
                     ? Icons.check_circle_outline
-                    : key == 'video' || key == 'liveness_video'
-                    ? Icons.videocam_outlined
                     : Icons.image_outlined,
                 color: file != null ? green : blue,
               ),
@@ -6898,12 +7547,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    file?.name ??
-                        (key == 'liveness_video'
-                            ? 'Open the live in-app camera check'
-                            : key == 'video'
-                            ? 'Upload or record the consent phrase'
-                            : 'Take a photo or choose an image'),
+                    file?.name ?? 'Take a photo or choose an image',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -6948,7 +7592,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                       SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          'Your personal information is locked after identity verification. You can still update your profile picture.',
+                          'Your personal information is locked after identity verification. You can still update your profile picture and Email.',
                         ),
                       ),
                     ],
@@ -6980,8 +7624,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                       TextFormField(
                         controller: field('first_name'),
                         readOnly: locked,
-                        decoration: const InputDecoration(
-                          labelText: 'First name',
+                        decoration: InputDecoration(
+                          labelText: mekenetTranslate('First name'),
                         ),
                         validator: (v) => (v == null || v.trim().isEmpty)
                             ? 'Enter your first name.'
@@ -6991,8 +7635,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                       TextFormField(
                         controller: field('last_name'),
                         readOnly: locked,
-                        decoration: const InputDecoration(
-                          labelText: 'Last name',
+                        decoration: InputDecoration(
+                          labelText: mekenetTranslate('Last name'),
                         ),
                         validator: (v) => (v == null || v.trim().isEmpty)
                             ? 'Enter your last name.'
@@ -7002,8 +7646,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                       TextFormField(
                         controller: field('username'),
                         readOnly: locked,
-                        decoration: const InputDecoration(
-                          labelText: 'Username',
+                        decoration: InputDecoration(
+                          labelText: mekenetTranslate('Username'),
                         ),
                         validator: (v) =>
                             (v == null ||
@@ -7018,8 +7662,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         controller: field('phone'),
                         readOnly: locked,
                         keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(
-                          labelText: 'Phone number',
+                        decoration: InputDecoration(
+                          labelText: mekenetTranslate('Phone number'),
                         ),
                         validator: (v) =>
                             (v == null ||
@@ -7039,8 +7683,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           setState(() {});
                         },
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Email address',
+                        decoration: InputDecoration(
+                          labelText: mekenetTranslate('Email address'),
                         ),
                         validator: (v) =>
                             v == null ||
@@ -7147,11 +7791,11 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.account_balance_wallet_outlined, color: sky),
+                  const Icon(Icons.shield_outlined, color: sky),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Manage the bank or wallet accounts used for receiving payouts. Account numbers are masked after saving.',
+                      'Save the bank or wallet accounts used for receiving payouts.',
                       style: TextStyle(
                         color: context.palette.muted,
                         height: 1.35,
@@ -7206,14 +7850,14 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         if (v == 'remove') {
                           _deletePayment(id);
                         } else {
-                          _post('/profile/payment-methods/$id/default', {});
+                          _makeDefaultPayment(id);
                         }
                       },
                       itemBuilder: (_) => [
                         if (r['is_default'] != true)
                           const PopupMenuItem(
                             value: 'default',
-                            child: Text('Make default'),
+                            child: Text('🛡 Make default'),
                           ),
                         const PopupMenuItem(
                           value: 'remove',
@@ -7392,8 +8036,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         children: [
                           TextFormField(
                             controller: field('name'),
-                            decoration: const InputDecoration(
-                              labelText: 'Ekub name',
+                            decoration: InputDecoration(
+                              labelText: mekenetTranslate('Ekub name'),
                               prefixIcon: Icon(Icons.savings_outlined),
                             ),
                             validator: (v) => (v == null || v.trim().isEmpty)
@@ -7404,8 +8048,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           DropdownButtonFormField<String>(
                             isExpanded: true,
                             value: category,
-                            decoration: const InputDecoration(
-                              labelText: 'Category',
+                            decoration: InputDecoration(
+                              labelText: mekenetTranslate('Category'),
                               prefixIcon: Icon(Icons.category_outlined),
                             ),
                             items: categories
@@ -7426,8 +8070,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           DropdownButtonFormField<String>(
                             isExpanded: true,
                             value: frequency,
-                            decoration: const InputDecoration(
-                              labelText: 'Payment frequency',
+                            decoration: InputDecoration(
+                              labelText: mekenetTranslate('Payment frequency'),
                               prefixIcon: Icon(Icons.event_repeat_outlined),
                             ),
                             items: frequencies
@@ -7450,8 +8094,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                             keyboardType: const TextInputType.numberWithOptions(
                               decimal: true,
                             ),
-                            decoration: const InputDecoration(
-                              labelText: 'Contribution per period (ETB)',
+                            decoration: InputDecoration(
+                              labelText: mekenetTranslate(
+                                'Contribution per period (ETB)',
+                              ),
                               prefixIcon: Icon(Icons.payments_outlined),
                             ),
                             validator: (v) =>
@@ -7463,8 +8109,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           TextFormField(
                             controller: field('duration'),
                             keyboardType: TextInputType.number,
-                            decoration: const InputDecoration(
-                              labelText: 'Number of periods',
+                            decoration: InputDecoration(
+                              labelText: mekenetTranslate('Number of periods'),
                               prefixIcon: Icon(
                                 Icons.format_list_numbered_rounded,
                               ),
@@ -7480,8 +8126,8 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           TextFormField(
                             controller: field('note'),
                             maxLines: 3,
-                            decoration: const InputDecoration(
-                              labelText: 'Note (optional)',
+                            decoration: InputDecoration(
+                              labelText: mekenetTranslate('Note (optional)'),
                               alignLabelWithHint: true,
                               prefixIcon: Icon(Icons.notes_rounded),
                             ),
@@ -7701,7 +8347,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                                 _FeatureValue(
                                   icon: Icons.payments_outlined,
                                   label: 'Contribution',
-                                  value: '${_money(r['base_amount'])} ETB',
+                                  value: _money(r['base_amount']),
                                 ),
                                 _FeatureValue(
                                   icon: Icons.people_outline_rounded,
@@ -7784,7 +8430,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           ),
                           Text(
                             _money(r['base_amount']) +
-                                ' ETB · ' +
+                                ' · ' +
                                 (r['duration'] ?? '').toString() +
                                 ' periods · ' +
                                 (r['member_count'] ?? '').toString() +
@@ -7799,8 +8445,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                                   ': @' +
                                   (win['username'] ?? '').toString() +
                                   ' · ' +
-                                  _money(win['net_amount']) +
-                                  ' ETB',
+                                  _money(win['net_amount']),
                             );
                           }),
                         ],
@@ -7924,7 +8569,9 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           decoration: InputDecoration(
                             labelText: 'Date of birth (YYYY-MM-DD)',
                             hintText: 'YYYY-MM-DD',
-                            prefixIcon: const Icon(Icons.calendar_today_outlined),
+                            prefixIcon: const Icon(
+                              Icons.calendar_today_outlined,
+                            ),
                             suffixIcon: IconButton(
                               tooltip: 'Choose date from calendar',
                               onPressed: busy ? null : _chooseDateOfBirth,
@@ -7999,6 +8646,40 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         Card(
                           child: ListTile(
                             leading: Icon(
+                              agreementVideo == null
+                                  ? Icons.videocam_outlined
+                                  : Icons.verified_rounded,
+                              color: agreementVideo == null ? sky : green,
+                            ),
+                            title: const Text('Agreement video (required)'),
+                            subtitle: Text(
+                              agreementVideo == null
+                                  ? 'Say “I Agree by Mekenet Ekub Rules.” or the Amharic statement below.'
+                                  : 'Ready · ${agreementVideoDurationSeconds ?? 0} seconds',
+                            ),
+                            trailing: FilledButton.tonal(
+                              onPressed: busy
+                                  ? null
+                                  : () => _pick('agreement_video'),
+                              child: Text(
+                                agreementVideo == null ? 'Record' : 'Redo',
+                              ),
+                            ),
+                          ),
+                        ),
+                        Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                            child: Text(
+                              '“I Agree by Mekenet Ekub Rules.”\n“በመቀነት እቁብ ህግ እና ደንብ ተስማምቻልው፡፡”',
+                              style: TextStyle(color: context.palette.muted),
+                            ),
+                          ),
+                        ),
+                        Card(
+                          child: ListTile(
+                            leading: Icon(
                               livenessPassed
                                   ? Icons.verified_user_rounded
                                   : Icons.face_retouching_natural_rounded,
@@ -8007,32 +8688,34 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                             title: const Text('Live face check'),
                             subtitle: Text(
                               livenessPassed
-                                  ? 'Passed on this device. No video saved.'
-                                  : 'Blink, turn your head, then follow the circle.',
+                                  ? 'Face and live movement checks passed on this device. Live video is not saved.'
+                                  : 'AI checks for one face in your photo and live centering, blinking, and head movement. Admin reviews your identity documents and agreement video.',
                             ),
                             trailing: FilledButton.tonal(
                               onPressed: busy
                                   ? null
-                                  : () => _pick('liveness_video'),
+                                  : () => _pick('liveness_check'),
                               child: Text(livenessPassed ? 'Repeat' : 'Start'),
                             ),
                           ),
                         ),
-                        _fileTile(
-                          context,
-                          'Agreement video — English or Amharic',
-                          video,
-                          'video',
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 7),
-                          child: Text(
-                            'The live camera check runs in this app and verifies each step before continuing. Then add a separate agreement video saying “I Agree by Mekenet Ekub Rules.” or “በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡” Only the agreement video and ID documents are uploaded.',
-                            style: TextStyle(
-                              color: context.palette.muted,
-                              fontSize: 12,
-                              height: 1.35,
+                        Card(
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: CheckboxListTile(
+                            value: kycRulesAccepted,
+                            onChanged: busy
+                                ? null
+                                : (value) => setState(
+                                    () => kycRulesAccepted = value ?? false,
+                                  ),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: const Text(
+                              'I agree to the Mekenet Ekub Rules.',
                             ),
+                            subtitle: const Text(
+                              'በመቀነት እቁብ ህግ እና ደንብ ተስማምቻልው፡፡',
+                            ),
+                            activeColor: green,
                           ),
                         ),
                         SizedBox(
@@ -8362,7 +9045,10 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            'Email: ${(result['email_hint'] ?? 'not available').toString()}',
+                            result['email_enabled'] == true &&
+                                    result['authenticator_enabled'] == true
+                                ? 'Email and authenticator enabled. Choose either at sign-in.'
+                                : 'Email: ${(result['email_hint'] ?? 'not available').toString()}',
                             style: TextStyle(color: context.palette.muted),
                           ),
                         ],
@@ -8394,13 +9080,15 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'Add an extra check when you sign in.',
+                      result['email_enabled'] == true
+                          ? 'Email verification is enabled. You can choose it at sign-in.'
+                          : 'Add an extra check when you sign in.',
                       style: TextStyle(
                         color: context.palette.muted,
                         fontSize: 12,
                       ),
                     ),
-                    if (emailCodeSent) ...[
+                    if (emailCodeSent && result['email_enabled'] != true) ...[
                       const SizedBox(height: 11),
                       TextField(
                         controller: field('code'),
@@ -8411,29 +9099,31 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                         ),
                       ),
                     ],
-                    const SizedBox(height: 11),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        onPressed: busy
-                            ? null
-                            : emailCodeSent
-                            ? () => _security('verify-email', {
-                                'code': field('code').text.trim(),
-                              })
-                            : () => _security('send-email-code'),
-                        icon: Icon(
-                          emailCodeSent
-                              ? Icons.verified_outlined
-                              : Icons.send_outlined,
-                        ),
-                        label: Text(
-                          emailCodeSent
-                              ? 'Verify and enable email OTP'
-                              : 'Send email code',
+                    if (result['email_enabled'] != true) ...[
+                      const SizedBox(height: 11),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: busy
+                              ? null
+                              : emailCodeSent
+                              ? () => _security('verify-email', {
+                                  'code': field('code').text.trim(),
+                                })
+                              : () => _security('send-email-code'),
+                          icon: Icon(
+                            emailCodeSent
+                                ? Icons.verified_outlined
+                                : Icons.send_outlined,
+                          ),
+                          label: Text(
+                            emailCodeSent
+                                ? 'Verify and enable email OTP'
+                                : '🛡 Send email code',
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
@@ -8460,14 +9150,28 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                     ),
                     const SizedBox(height: 5),
                     Text(
-                      'Use Google Authenticator, Microsoft Authenticator, or another TOTP app.',
+                      result['authenticator_enabled'] == true
+                          ? 'Authenticator is enabled. Use it at sign-in, or choose email if enabled.'
+                          : 'Use Google Authenticator, Microsoft Authenticator, or another TOTP app.',
                       style: TextStyle(
                         color: context.palette.muted,
                         height: 1.35,
                         fontSize: 12,
                       ),
                     ),
-                    if (secret != null) ...[
+                    if (result['authenticator_enabled'] == true) ...[
+                      const SizedBox(height: 11),
+                      const Row(
+                        children: [
+                          Icon(Icons.verified_user_outlined, color: green),
+                          SizedBox(width: 8),
+                          Text(
+                            'Authenticator enabled',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                    ] else if (secret != null) ...[
                       const SizedBox(height: 10),
                       const Text(
                         'Secret copied. Add this key manually in your authenticator app.',
@@ -8510,7 +9214,7 @@ class _ProfileFeaturePageState extends State<ProfileFeaturePage> {
                               ? null
                               : () => _security('start-authenticator'),
                           icon: const Icon(Icons.qr_code_2_rounded),
-                          label: const Text('Set up authenticator'),
+                          label: const Text('🛡 Set up authenticator'),
                         ),
                       ),
                     ],
@@ -8991,10 +9695,49 @@ Future<bool> _joinEkub(
     ),
   );
   if (share == null || !context.mounted) return false;
+  String? inviteCode;
+  final isMerchantEkub = item['is_merchant'] == true;
+  if (isMerchantEkub) {
+    final codeController = TextEditingController();
+    inviteCode = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Merchant invite code'),
+        content: TextField(
+          controller: codeController,
+          textCapitalization: TextCapitalization.characters,
+          maxLength: 20,
+          decoration: const InputDecoration(
+            labelText: 'Enter the code shared by the merchant',
+            prefixIcon: Icon(Icons.key_rounded),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              codeController.text.trim().toUpperCase(),
+            ),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    codeController.dispose();
+    if (inviteCode == null || inviteCode.isEmpty || !context.mounted)
+      return false;
+  }
   try {
     await api.post(
       '/ekubs/' + _int(item['id']).toString() + '/join',
-      body: {'share_type': share},
+      body: {
+        'share_type': share,
+        if (inviteCode != null) 'join_code': inviteCode,
+      },
     );
     if (context.mounted) {
       await showDialog<void>(
@@ -9023,13 +9766,15 @@ Future<bool> _joinEkub(
                   ),
                 ),
                 const SizedBox(height: 14),
-                const Text(
-                  'You’re in!',
+                Text(
+                  isMerchantEkub ? 'Request sent' : 'You’re in!',
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                 ),
                 const SizedBox(height: 7),
                 Text(
-                  'You joined ${(item['name'] ?? 'this Ekub').toString()} with a ${share.toUpperCase()} share.',
+                  isMerchantEkub
+                      ? 'Your request to join ${(item['name'] ?? 'this Ekub').toString()} was sent. The merchant must approve it before you become a member.'
+                      : 'You joined ${(item['name'] ?? 'this Ekub').toString()} with a ${share.toUpperCase()} share.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.palette.muted, height: 1.4),
                 ),
