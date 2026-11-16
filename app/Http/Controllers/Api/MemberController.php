@@ -63,7 +63,6 @@ class MemberController
     {
         $query = DB::table('ekubs')
             ->whereIn('status', ['open', 'started'])
-            ->whereRaw('(SELECT COALESCE(SUM(share_fraction), 0) FROM ekub_members WHERE ekub_members.ekub_id = ekubs.id) < ekubs.duration - 0.000001')
             ->orderByDesc('id');
 
         if ($request->filled('category')) {
@@ -103,31 +102,7 @@ class MemberController
             ->where('ekub_id', $ekubId)
             ->where('user_id', $userId)
             ->first();
-        $isMerchantOwner = ! empty($row->merchant_id)
-            && DB::table('merchants')->where('id',$row->merchant_id)->where('user_id',$userId)->exists();
-        $canManage = in_array((string) $request->user()->role, ['admin','partner'], true);
-        if ($this->ekubs->isFull((array) $row) && ! $membership && ! $isMerchantOwner && ! $canManage) {
-            return response()->json(['message' => 'Ekub not found.'], 404);
-        }
         $payload = $this->ekubPayload((array) $row, $userId);
-        $members = DB::table('ekub_members as m')
-            ->join('users as u', 'u.id', '=', 'm.user_id')
-            ->where('m.ekub_id', $ekubId)
-            ->orderBy('m.id')
-            ->get(['u.first_name', 'u.last_name', 'u.username', 'u.profile_picture', 'm.share_type', 'm.contribution_amount'])
-            ->map(function ($member): array {
-                return [
-                    'first_name' => $member->first_name,
-                    'last_name' => $member->last_name,
-                    'username' => $member->username,
-                    'profile_picture_url' => filled($member->profile_picture)
-                        ? app(UploadStorage::class)->url((string) $member->profile_picture)
-                        : null,
-                    'share_type' => $member->share_type,
-                    'contribution_amount' => (float) $member->contribution_amount,
-                ];
-            })
-            ->values();
 
         $winners = $membership
             ? DB::table('payouts as p')
@@ -189,7 +164,8 @@ class MemberController
 
         return response()->json([
             'ekub' => $payload,
-            'join_request' => DB::table('merchant_join_requests')->where('ekub_id',$ekubId)->where('user_id',$userId)->first(['status','created_at']),
+            'merchant_ad' => $row->merchant_id ? $this->merchantAd($ekubId) : null,
+            'my_join_request' => $row->merchant_id ? DB::table('merchant_join_requests')->where('ekub_id', $ekubId)->where('user_id', $userId)->value('status') : null,
             'membership' => $membership ? [
                 'id' => (int) $membership->id,
                 'share_type' => $membership->share_type,
@@ -197,7 +173,13 @@ class MemberController
                 'contribution_amount' => (float) $membership->contribution_amount,
                 'status' => $membership->status,
             ] : null,
-            'members' => $members,
+            'members' => DB::table('ekub_members as m')
+                ->join('users as u', 'u.id', '=', 'm.user_id')
+                ->where('m.ekub_id', $ekubId)
+                ->orderBy('m.id')
+                ->get(['u.first_name', 'u.last_name', 'u.username', 'm.share_type', 'm.contribution_amount'])
+                ->map(fn ($member) => (array) $member)
+                ->values(),
             'winners' => $winners,
             'my_payment_periods' => $myPaymentPeriods,
             'potential_net_payout' => round((float) $row->base_amount * (float) $row->duration * 0.98, 2),
@@ -208,7 +190,7 @@ class MemberController
     {
         $data = $request->validate([
             'share_type' => ['required', 'in:full,half,quarter'],
-            'join_code' => ['nullable', 'string', 'max:20'],
+            'invite_code' => ['nullable', 'string', 'max:20'],
         ]);
         $user = $request->user();
 
@@ -220,32 +202,23 @@ class MemberController
         }
 
         $shareType = $data['share_type'];
-
-        $merchantEkub = DB::table('ekubs')->where('id',$ekubId)->first(['id','merchant_id','join_code','name','status']);
-        if ($merchantEkub && $merchantEkub->merchant_id) {
-            $capacity = DB::table('ekubs')->where('id',$ekubId)->value('duration');
-            $used = (float) DB::table('ekub_members')->where('ekub_id',$ekubId)->sum('share_fraction');
-            if ((float) $capacity - $used <= 0.000001) {
-                return response()->json(['message'=>'This Ekub is full and no longer accepts join requests.'],422);
+        $ekubForJoin = DB::table('ekubs')->where('id', $ekubId)->first();
+        if ($ekubForJoin && $ekubForJoin->merchant_id) {
+            if ($ekubForJoin->status !== 'open') return response()->json(['message' => 'This Ekub is not accepting members.'], 422);
+            if ((bool) $ekubForJoin->is_item && $shareType !== 'full') return response()->json(['message' => 'Item Ekubs only allow a full share.'], 422);
+            if (DB::table('ekub_members')->where('ekub_id', $ekubId)->where('user_id', $user->id)->exists()) return response()->json(['message' => 'You already joined this Ekub.'], 422);
+            $requestedFraction = match ($shareType) { 'full' => 1.0, 'half' => 0.5, 'quarter' => 0.25 };
+            $usedCapacity = (float) DB::table('ekub_members')->where('ekub_id', $ekubId)->sum('share_fraction');
+            if ($usedCapacity + $requestedFraction > (float) $ekubForJoin->duration + 0.000001) return response()->json(['message' => 'This Ekub is full or does not have enough capacity for that share.'], 422);
+            if (! filled($data['invite_code'] ?? null) || ! hash_equals((string) $ekubForJoin->invite_code, strtoupper(trim((string) $data['invite_code'])))) {
+                return response()->json(['message' => 'Enter the invite code shared by this merchant.'], 422);
             }
-            $merchant = DB::table('merchants')->where('id',$merchantEkub->merchant_id)->where('status','approved')->first();
-            if (! $merchant || ! hash_equals((string)$merchantEkub->join_code, strtoupper(trim((string)($data['join_code'] ?? ''))))) {
-                return response()->json(['message'=>'Invite code is incorrect. Ask this merchant for the code.'],422);
-            }
-            if (DB::table('ekub_members')->where('ekub_id',$ekubId)->where('user_id',$user->id)->exists()) return response()->json(['message'=>'You already joined this Ekub.'],422);
-            try {
-                DB::transaction(function () use ($merchantEkub,$merchant,$user,$shareType): void {
-                    if ($merchantEkub->status !== 'open') abort(422,'This Ekub is not accepting member requests.');
-                    $existing = DB::table('merchant_join_requests')->where('ekub_id',$merchantEkub->id)->where('user_id',$user->id)->first();
-                    if ($existing && $existing->status === 'pending') abort(422,'Your request is already waiting for merchant approval.');
-                    if ($existing && $existing->status === 'approved') abort(422,'Your membership has already been approved.');
-                    $values=['merchant_id'=>$merchant->id,'share_type'=>$shareType,'status'=>'pending','created_at'=>now(),'reviewed_at'=>null,'reviewed_by'=>null];
-                    if ($existing) DB::table('merchant_join_requests')->where('id',$existing->id)->update($values);
-                    else DB::table('merchant_join_requests')->insert($values+['ekub_id'=>$merchantEkub->id,'user_id'=>$user->id]);
-                    DB::table('member_notifications')->insertOrIgnore(['user_id'=>$merchant->user_id,'type'=>'merchant_join_request','title'=>'New private Ekub join request','body'=>'@'.$user->username.' requested to join '.$merchantEkub->name.'. Review it in your merchant dashboard.','event_key'=>'merchant.join.request:'.$merchantEkub->id.':'.$user->id,'created_at'=>now()]);
-                });
-            } catch (\Illuminate\Http\Exceptions\HttpResponseException $exception) { throw $exception; }
-            return response()->json(['message'=>'Join request sent. The merchant will review it.','status'=>'pending'],202);
+            $alreadyRequested = DB::table('merchant_join_requests')->where('ekub_id', $ekubId)->where('user_id', $user->id)->first();
+            if ($alreadyRequested && $alreadyRequested->status === 'pending') return response()->json(['message' => 'Your join request is waiting for merchant approval.'], 202);
+            DB::table('merchant_join_requests')->updateOrInsert(['ekub_id' => $ekubId, 'user_id' => $user->id], [
+                'merchant_id' => $ekubForJoin->merchant_id, 'share_type' => $shareType, 'status' => 'pending', 'created_at' => now(), 'reviewed_at' => null,
+            ]);
+            return response()->json(['message' => 'Join request sent. The merchant must approve it before you are added.', 'status' => 'pending'], 202);
         }
 
         try {
@@ -472,8 +445,8 @@ class MemberController
             'base_amount' => (float) $ekub['base_amount'],
             'duration' => (int) $ekub['duration'],
             'status' => $ekub['status'],
-            'is_merchant' => !empty($ekub['merchant_id']),
             'is_item' => (bool) $ekub['is_item'],
+            'is_merchant_ekub' => ! empty($ekub['merchant_id']),
             'current_period' => (int) $ekub['current_period'],
             'member_count' => (int) $memberCount,
             'used_capacity' => round((float) $used, 2),
@@ -482,21 +455,20 @@ class MemberController
             'is_full' => (float) $ekub['duration'] - $used <= 0.000001,
             'joined' => $joined,
             'images' => array_map(fn ($path) => app(UploadStorage::class)->url((string) $path), $images),
+            'merchant_banner' => ! empty($ekub['banner_image'])
+                ? app(UploadStorage::class)->url((string) $ekub['banner_image'])
+                : null,
             'starts_at' => $ekub['start_at'] ?? null,
-            'merchant' => !empty($ekub['merchant_id']) ? DB::table('merchants')->where('id',$ekub['merchant_id'])->first(['business_name','category','address','website_url','location_lat','location_lng']) : null,
-            'merchant_ad' => $this->merchantAd($ekub),
         ];
     }
 
-    private function merchantAd(array $ekub): ?array
+    private function merchantAd(int $ekubId): ?array
     {
-        if (empty($ekub['merchant_id'])) return null;
-        $ad = DB::table('merchant_ekub_ads')->where('ekub_id',$ekub['id'])->first();
+        $ad = DB::table('merchant_ekub_ads')->where('ekub_id', $ekubId)->first();
         if (! $ad) return null;
-        $result=(array)$ad;
-        $result['images']=array_map(fn ($path)=>app(UploadStorage::class)->url((string)$path),json_decode($ad->images ?? '[]',true) ?: []);
-        $result['map_url']=$ad->latitude !== null && $ad->longitude !== null ? 'https://www.google.com/maps/search/?api=1&query='.$ad->latitude.','.$ad->longitude : null;
-        return $result;
+        $data = (array) $ad;
+        $data['images'] = array_map(fn ($path) => app(UploadStorage::class)->url((string) $path), json_decode((string) $ad->images, true) ?: []);
+        return $data;
     }
 }
 

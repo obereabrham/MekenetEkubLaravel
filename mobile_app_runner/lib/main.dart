@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
 import 'app_lock.dart';
+import 'admin_merchant_page.dart';
 import 'agreement_video_capture_page.dart';
 import 'liveness_capture_page.dart';
 import 'merchant_center_page.dart';
@@ -471,6 +472,12 @@ class _MekenetAppState extends State<MekenetApp> with WidgetsBindingObserver {
                 if (mounted) setState(() => locked = false);
               },
               onSignInAgain: () => _forceSignInAgain(),
+            )
+          : user!['role'] == 'admin'
+          ? AdminMerchantPage(
+              api: widget.api,
+              user: user!,
+              onSignOut: _signOut,
             )
           : MemberPage(
               api: widget.api,
@@ -3402,8 +3409,10 @@ class _HomeEkubCard extends StatelessWidget {
         ? item['merchant_ad'] as Map
         : const <String, dynamic>{};
     final merchantImages = merchantAd['images'] as List? ?? const [];
-    final merchantBanner =
-        item['is_merchant'] == true && merchantImages.isNotEmpty
+    final explicitBanner = (item['merchant_banner'] ?? '').toString();
+    final merchantBanner = explicitBanner.isNotEmpty
+        ? explicitBanner
+        : item['is_merchant_ekub'] == true && merchantImages.isNotEmpty
         ? merchantImages.first.toString()
         : null;
     final isItem = item['is_item'] == true;

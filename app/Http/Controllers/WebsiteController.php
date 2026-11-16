@@ -3,17 +3,14 @@ namespace App\Http\Controllers;
 
 use App\Support\BrandedEmail;
 use App\Support\EkubService;
-use App\Support\LocationGeocoder;
 use App\Support\UploadStorage;
-use App\Support\VisitTracker;
+use App\Support\VideoDuration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
-use Illuminate\Validation\Rule;
 use PragmaRX\Google2FA\Google2FA;
 use Throwable;
 
@@ -21,22 +18,7 @@ class WebsiteController
 {
     public function __construct(private EkubService $ekubs) {}
 
-    private function page(string $name, array $data = [])
-    {
-        try {
-            if (request()->isMethod('get') && ! in_array(session('role'), ['admin', 'partner'], true)) {
-                app(VisitTracker::class)->record(
-                    request(),
-                    'website',
-                    session('role') === 'member' && session('user_id') ? (int) session('user_id') : null,
-                );
-            }
-        } catch (Throwable $e) {
-            Log::warning('Could not record website visit.', ['error' => $e->getMessage()]);
-        }
-
-        return view($name, $data);
-    }
+    private function page(string $name, array $data = []) { return view($name, $data); }
     private function row($row): ?array { return $row ? (array) $row : null; }
     private function rows($rows): array { return collect($rows)->map(fn ($row) => (array) $row)->all(); }
     private function flash(string $message, string $type = 'message'): void
@@ -56,24 +38,9 @@ class WebsiteController
     private function normalizedPhone(string $value): ?string
     {
         $digits = preg_replace('/\D+/', '', trim($value));
-        if (str_starts_with($digits, '00')) $digits = substr($digits, 2);
         if (str_starts_with($digits, '251')) $digits = substr($digits, 3);
         if (str_starts_with($digits, '0')) $digits = substr($digits, 1);
         return preg_match('/^9\d{8}$/', $digits) ? '+251'.$digits : null;
-    }
-    private function phoneCandidates(string $value): array
-    {
-        $digits=preg_replace('/\D+/','',trim($value));$national=$digits;
-        if(str_starts_with($national,'00'))$national=substr($national,2);
-        if(str_starts_with($national,'251'))$national=substr($national,3);
-        if(str_starts_with($national,'0'))$national=substr($national,1);
-        if(preg_match('/^9\d{8}$/',$national)!==1)return [$value];
-        return array_values(array_unique(['+251'.$national,'0'.$national,'251'.$national,$national,trim($value)]));
-    }
-    private function phoneDigitCandidates(string $normalizedPhone): array
-    {
-        $digits=preg_replace('/\D+/','',$normalizedPhone);$national=str_starts_with($digits,'251')?substr($digits,3):$digits;
-        return array_values(array_unique(['251'.$national,'0'.$national,$national,'00251'.$national]));
     }
     private function validPassword(string $password): bool
     {
@@ -272,60 +239,50 @@ class WebsiteController
         [$name,$domain]=explode('@',$email,2);
         return mb_substr($name,0,1).str_repeat('*',max(3,mb_strlen($name)-1)).'@'.$domain;
     }
-    private function authenticatorQrData(?string $uri): ?string
-    {
-        if (! $uri) return null;
-        $renderer = new \BaconQrCode\Renderer\ImageRenderer(
-            new \BaconQrCode\Renderer\RendererStyle\RendererStyle(240, 4),
-            new \BaconQrCode\Renderer\Image\SvgImageBackEnd(),
-        );
-        $svg = (new \BaconQrCode\Writer($renderer))->writeString($uri);
-        return 'data:image/svg+xml;base64,'.base64_encode($svg);
-    }
-    private function saveUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null, ?array $allowed = null, ?array $owner = null): ?string
+    private function saveUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null, ?array $allowed = null): ?string
     {
         if (! $file || ! $file->isValid()) return null;
         $extension = strtolower($file->getClientOriginalExtension());
         $allowed ??= config('ekub.upload_extensions');
         if (! in_array($extension, $allowed, true)) throw new \RuntimeException('Unsupported file type.');
-        if (in_array($extension, ['png', 'jpg', 'jpeg', 'webp', 'gif'], true) && $file->getSize() > 1024 * 1024) {
-            throw new \RuntimeException('Images must be 1 MB or smaller.');
-        }
-        if ($file->getSize() > 50 * 1024 * 1024) throw new \RuntimeException('File size must be 50 MB or less.');
+        $imageExtensions=['png','jpg','jpeg','webp','gif'];
+        if (in_array($extension,$imageExtensions,true) && $file->getSize() > 1024 * 1024) throw new \RuntimeException('Images must be 1 MB or smaller.');
+        if (!in_array($extension,$imageExtensions,true) && $file->getSize() > 50 * 1024 * 1024) throw new \RuntimeException('File size must be 50 MB or less.');
         $directory = 'static/uploads'.($folder ? '/'.trim($folder, '/') : '');
         $slug = $base ? trim(preg_replace('/[^\pL\pN_-]+/u', '-', $base), '-_') : bin2hex(random_bytes(16));
         $slug = mb_substr($slug ?: 'file', 0, 70);
-        if ($owner) {
-            $username = trim(preg_replace('/[^\pL\pN_-]+/u', '-', (string) ($owner['username'] ?? 'member')), '-_');
-            $slug = mb_substr($username ?: 'member', 0, 48).'-'.$slug;
-        }
         $name = $slug.'.'.$extension; $n = 2;
         $uploads = app(UploadStorage::class);
-        $path = $owner
-            ? $uploads->userPath((string) ($owner['username'] ?? 'member'), (int) $owner['id'], $folder ?: 'files', $name)
-            : ($directory ? $directory.'/' : '').$name;
+        $path = ($directory ? $directory.'/' : '').$name;
         while ($uploads->exists($path)) {
             $name = $slug.'_'.($n++).'.'.$extension;
-            $path = $owner
-                ? $uploads->userPath((string) ($owner['username'] ?? 'member'), (int) $owner['id'], $folder ?: 'files', $name)
-                : ($directory ? $directory.'/' : '').$name;
+            $path = ($directory ? $directory.'/' : '').$name;
         }
         return $uploads->put($file, $path);
     }
-    private function imageUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null, ?array $owner = null): ?string
+    private function saveUserUpload(?\Illuminate\Http\UploadedFile $file, array $user, string $folder, string $base, array $allowed): ?string
     {
-        if ($file && (! $file->isValid() || ! str_starts_with(strtolower((string) $file->getMimeType()), 'image/'))) {
-            throw new \RuntimeException('Choose a valid image file.');
-        }
-        if ($file && $file->getSize() > 1024 * 1024) throw new \RuntimeException('Images must be 1 MB or smaller.');
-        return $this->saveUpload($file, $folder, $base, ['png','jpg','jpeg','webp','gif'], $owner);
+        if (!$file || !$file->isValid()) return null;
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
+        if (!in_array($extension, $allowed, true)) throw new \RuntimeException('Unsupported file type.');
+        $isImage = in_array($extension, ['png','jpg','jpeg','webp','gif'], true);
+        if ($isImage && $file->getSize() > 1024 * 1024) throw new \RuntimeException('Images must be 1 MB or smaller.');
+        if (!$isImage && $file->getSize() > 50 * 1024 * 1024) throw new \RuntimeException('File size must be 50 MB or less.');
+        $slug = mb_substr(trim(preg_replace('/[^\pL\pN_-]+/u', '-', $base), '-_') ?: 'file', 0, 70);
+        $filename = $slug.'_'.bin2hex(random_bytes(5)).'.'.$extension;
+        return app(UploadStorage::class)->putForUser($file, (string) $user['username'], (int) $user['id'], $folder, $filename);
     }
-    private function insertEkub(string $name, string $category, string $frequency, float $amount, int $duration, bool $isItem, array $images = [], ?int $recreatedFrom = null, ?int $merchantId = null, ?string $joinCode = null): int
+    private function imageUpload(?\Illuminate\Http\UploadedFile $file, ?string $folder = null, ?string $base = null): ?string
+    {
+        if ($file && $file->getSize() > 1024 * 1024) throw new \RuntimeException('Images must be 1 MB or smaller.');
+        return $this->saveUpload($file, $folder, $base, ['png','jpg','jpeg','webp','gif']);
+    }
+    private function insertEkub(string $name, string $category, string $frequency, float $amount, int $duration, bool $isItem, array $images = [], ?int $recreatedFrom = null): int
     {
         $id = DB::table('ekubs')->insertGetId([
             'name'=>$name,'category'=>$category,'frequency'=>$frequency,'base_amount'=>$amount,'duration'=>$duration,
             'status'=>'open','is_item'=>$isItem,'product1'=>$images[0] ?? null,'product2'=>$images[1] ?? null,'product3'=>$images[2] ?? null,
-            'recreated_from'=>$recreatedFrom,'merchant_id'=>$merchantId,'join_code'=>$joinCode,'created_at'=>now(),
+            'recreated_from'=>$recreatedFrom,'created_at'=>now(),
         ]);
         foreach ($images as $position => $image) DB::table('ekub_images')->insert(['ekub_id'=>$id,'image'=>$image,'position'=>$position,'created_at'=>now()]);
         return (int) $id;
@@ -343,34 +300,19 @@ class WebsiteController
 
     public function home()
     {
-        try {
-            $ratings = $this->rows(DB::table('website_ratings')->where('visible', true)->orderByDesc('created_at')->limit(12)->get(['display_name', 'rating', 'comment', 'created_at']));
-        } catch (Throwable $e) {
-            Log::warning('Could not load website reviews.', ['error' => $e->getMessage()]);
-            $ratings = [];
-        }
-        return $this->page('index', ['ratings' => $ratings]);
-    }
+        $reviews = DB::table('site_ratings as ratings')
+            ->join('users', 'users.id', '=', 'ratings.user_id')
+            ->whereNotNull('ratings.comment')
+            ->where('ratings.comment', '<>', '')
+            ->orderByDesc('ratings.updated_at')
+            ->limit(12)
+            ->get(['ratings.rating', 'ratings.comment', 'ratings.updated_at', 'users.username']);
 
-    public function submitWebsiteRating(Request $request)
-    {
-        $data = $request->validate([
-            'display_name' => ['required', 'string', 'min:2', 'max:80'],
-            'rating' => ['required', 'integer', 'min:1', 'max:5'],
-            'comment' => ['required', 'string', 'min:5', 'max:1000'],
+        return $this->page('index', [
+            'site_rating_average' => round((float) (DB::table('site_ratings')->avg('rating') ?? 0), 1),
+            'site_rating_count' => (int) DB::table('site_ratings')->count(),
+            'site_reviews' => $this->rows($reviews),
         ]);
-        $user = $this->currentUser();
-        DB::table('website_ratings')->insert([
-            'user_id' => $user['id'] ?? null,
-            'display_name' => trim($data['display_name']),
-            'rating' => (int) $data['rating'],
-            'comment' => trim($data['comment']),
-            'visible' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $this->flash('Thank you for sharing your Mekenet Ekub review.', 'success');
-        return redirect()->to(route('home').'#community-ratings');
     }
     public function homePage() { return $this->go('home'); }
     public function about() { return $this->page('about'); }
@@ -382,17 +324,15 @@ class WebsiteController
     {
         $user = $this->currentUser();
         if ($user && in_array($user['role'], ['admin','partner'], true)) return $this->go($user['role'] === 'admin' ? 'admin_dashboard' : 'partner_dashboard');
-        $data = $this->rows(DB::table('ekubs')->whereIn('status', ['open','started'])
-            ->whereRaw('(SELECT COALESCE(SUM(share_fraction), 0) FROM ekub_members WHERE ekub_members.ekub_id = ekubs.id) < ekubs.duration - 0.000001')
-            ->orderByDesc('id')->get());
+        $data = $this->rows(DB::table('ekubs')->whereIn('status', ['open','started'])->orderByDesc('id')->get());
         $joined = $user ? DB::table('ekub_members')->where('user_id', $user['id'])->pluck('ekub_id')->all() : [];
         foreach ($data as &$ekub) {
+            $ekub['merchant_banner'] = !empty($ekub['banner_image']) ? app(UploadStorage::class)->url((string)$ekub['banner_image']) : null;
             $used = $this->ekubs->usedCapacity((int) $ekub['id']);
             $ekub['joined'] = in_array($ekub['id'], $joined);
             $ekub['member_count'] = floor($used) === $used ? (int) $used : round($used, 2);
             $ekub['max_members'] = (int) $ekub['duration'];
             $ekub['is_full'] = (float) $ekub['duration'] - $used <= 0.000001;
-            $ekub['merchant_banner'] = $this->merchantBannerUrl($ekub);
         }
         unset($ekub);
         return $this->page('ekubs', ['ekubs'=>$data]);
@@ -402,38 +342,20 @@ class WebsiteController
     {
         $ekub = $this->row(DB::table('ekubs')->where('id', $ekubId)->first());
         if (! $ekub) return response()->view('error', ['code'=>404,'message'=>'Ekub not found.'], 404);
+        $members = $this->rows(DB::table('ekub_members as em')->join('users as u','u.id','=','em.user_id')->where('em.ekub_id',$ekubId)->orderBy('em.id')->get(['em.*','u.first_name','u.last_name','u.username','u.phone']));
         $user = $this->currentUser();
-        $alreadyJoined = $user && DB::table('ekub_members')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->exists();
-        $canManage = $user && in_array($user['role'], ['admin','partner'], true);
-        $ownsMerchantEkub = $user && ! empty($ekub['merchant_id'])
-            && DB::table('merchants')->where('id',$ekub['merchant_id'])->where('user_id',$user['id'])->exists();
-        if ($this->ekubs->isFull($ekub) && ! $alreadyJoined && ! $canManage && ! $ownsMerchantEkub) {
-            return response()->view('error', ['code'=>404,'message'=>'Ekub not found.'], 404);
-        }
-        $members = $this->rows(DB::table('ekub_members as em')->join('users as u','u.id','=','em.user_id')->where('em.ekub_id',$ekubId)->orderBy('em.id')->get(['em.*','u.first_name','u.last_name','u.username','u.phone','u.profile_picture']));
         $alreadyJoined = $user && collect($members)->contains(fn ($m) => (int) $m['user_id'] === (int) $user['id']);
+        $joinRequestStatus=$user&&!empty($ekub['merchant_id'])?DB::table('merchant_join_requests')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->value('status'):null;
         $canSeeWinners = $user && ($user['role'] === 'admin' || $alreadyJoined);
-        $merchantOwned = ! empty($ekub['merchant_id']);
-        $joinRequest = $merchantOwned && $user
-            ? $this->row(DB::table('merchant_join_requests')->where('ekub_id', $ekubId)->where('user_id', $user['id'])->first())
-            : null;
-        $merchantAd = null;
-        $merchantInfo = null;
-        if ($merchantOwned) {
-            $merchantInfo = $this->row(DB::table('merchants')->where('id',$ekub['merchant_id'])->first(['business_name','category','address','website_url','location_lat','location_lng']));
-            $merchantAd = $this->row(DB::table('merchant_ekub_ads')->where('ekub_id', $ekubId)->first());
-            if ($merchantAd) {
-                $merchantAd['images'] = collect(json_decode($merchantAd['images'] ?? '[]', true) ?: [])
-                    ->map(fn ($image) => app(UploadStorage::class)->url($image))->all();
-                $merchantAd['map_url'] = $merchantAd['latitude'] !== null && $merchantAd['longitude'] !== null
-                    ? 'https://www.google.com/maps/search/?api=1&query='.$merchantAd['latitude'].','.$merchantAd['longitude'] : null;
-            }
+        $merchantAd=null;
+        if(!empty($ekub['merchant_id'])){
+            $ad=$this->row(DB::table('merchant_ekub_ads')->where('ekub_id',$ekubId)->first());
+            if($ad){$ad['images']=array_map(fn($path)=>app(UploadStorage::class)->url((string)$path),json_decode((string)($ad['images']??''),true)?:[]);$merchantAd=$ad;}
         }
         return $this->page('ekub_detail', [
             'ekub'=>$ekub,'members'=>$members,'item_images'=>$this->ekubs->images($ekub),'is_full'=>$this->ekubs->isFull($ekub),
             'already_joined'=>$alreadyJoined,'net'=>round($ekub['base_amount']*$ekub['duration']*0.98,2),
-            'winners'=>$canSeeWinners ? $this->ekubs->winners($ekubId) : [],'can_see_winners'=>$canSeeWinners,
-            'merchant_owned'=>$merchantOwned,'merchant_info'=>$merchantInfo,'merchant_ad'=>$merchantAd,'join_request'=>$joinRequest,
+            'winners'=>$canSeeWinners ? $this->ekubs->winners($ekubId) : [],'can_see_winners'=>$canSeeWinners,'merchant_ad'=>$merchantAd,'join_request_status'=>$joinRequestStatus,
         ]);
     }
 
@@ -460,39 +382,17 @@ class WebsiteController
 
     public function login(Request $request)
     {
+        if ($request->query('return_to') === '/profile#website-rating') {
+            session()->put('post_login_redirect', '/profile#website-rating');
+        }
         if ($request->isMethod('post')) {
             $ident=trim((string)$request->input('identifier')); $password=(string)$request->input('password');
             if (! $ident || ! $password) $this->flash('Username, phone or email and password are required.','error');
             else {
                 $phone=$this->normalizedPhone($ident);
-                $phoneCandidates=$phone?$this->phoneCandidates($ident):[];$phoneDigits=$phone?$this->phoneDigitCandidates($phone):[];
-                $user=$this->row(DB::table('users')->where(function($query)use($ident,$phone,$phoneCandidates,$phoneDigits){
-                    $query->where('username',$ident)->orWhere('email',mb_strtolower($ident));
-                    if($phone){$query->orWhereIn('phone',$phoneCandidates)->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), '.', ''), '/', '') IN (".implode(',',array_fill(0,count($phoneDigits),'?')).')',$phoneDigits);}
-                    else $query->orWhere('phone',$ident);
-                })->first());
+                $user=$this->row(DB::table('users')->where(function($query)use($ident,$phone){$query->whereRaw('LOWER(username) = ?', [mb_strtolower($ident)])->orWhereRaw('LOWER(email) = ?', [mb_strtolower($ident)]);if($phone!==null)$query->orWhere('phone',$phone);})->first());
                 if (! $user || ! Hash::check($password,$user['password_hash'])) $this->flash('Invalid login credentials.','error');
                 elseif ($user['status'] !== 'active') $this->flash('This account is suspended.','error');
-                elseif (in_array($user['role'], ['admin', 'partner'], true)) {
-                    if (empty($user['email']) || !filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
-                        $this->flash('A valid email address is required for admin and partner sign-in. Ask an administrator to add one.','error');
-                        return $this->go('login');
-                    }
-                    session()->forget(['pending_2fa_user','pending_2fa_verified','pending_2fa_started_at','pending_totp_secret','email_otp_login']);
-                    session()->put(['pending_2fa_user'=>$user['id'],'pending_2fa_verified'=>['email'=>false,'authenticator'=>false],'pending_2fa_started_at'=>now()->timestamp]);
-                    if (empty($user['totp_secret'])) {
-                        session()->put('pending_totp_secret',(new Google2FA())->generateSecretKey());
-                    }
-                    try {
-                        $this->issueEmailOtp($user,'login');
-                        $this->flash($this->emailOtpDeliveryNotice($user['email'] ?? null,'sign-in'),'message');
-                    } catch (Throwable $e) {
-                        session()->forget(['pending_2fa_user','pending_2fa_verified','pending_2fa_started_at','pending_totp_secret','email_otp_login']);
-                        $this->flash($e instanceof \RuntimeException ? $e->getMessage() : 'Could not send a sign-in code. Check the email settings and try again.','error');
-                        return $this->go('login');
-                    }
-                    return $this->go('verify_login');
-                }
                 elseif ($user['twofa_enabled']) {
                     $emailAvailable=$this->hasEmailOtp($user); $authenticatorAvailable=$this->hasAuthenticator($user);
                     if (!$emailAvailable && !$authenticatorAvailable) { $this->flash('Two-factor sign-in is not configured correctly. Contact the site administrator.','error'); return $this->go('login'); }
@@ -511,71 +411,16 @@ class WebsiteController
     private function finishLogin(array $user)
     {
         session()->regenerate(); session()->put(['user_id'=>$user['id'],'role'=>$user['role'],'username'=>$user['username'],'welcome'=>$user['first_login'] ? 'Welcome' : 'Welcome back']);
-        session()->forget(['pending_2fa_user','pending_2fa_verified','pending_2fa_started_at','pending_totp_secret','email_otp_login','email_otp_setup','email_otp_sensitive','pending_2fa_method']);
+        session()->forget(['pending_2fa_user','pending_totp_secret','email_otp_login','email_otp_setup','email_otp_sensitive','pending_2fa_method']);
         DB::table('users')->where('id',$user['id'])->update(['first_login'=>false]);
+        $returnTo=session()->pull('post_login_redirect');
+        if ($user['role']==='member' && $returnTo==='/profile#website-rating') return redirect($returnTo);
         return $this->go(match($user['role']) {'admin'=>'admin_dashboard','partner'=>'partner_dashboard',default=>'dashboard'});
     }
     public function verifyLogin(Request $request)
     {
         $user=$this->row(DB::table('users')->where('id',session('pending_2fa_user'))->first());
-        if (! $user) return $this->go('login');
-        if (in_array($user['role'], ['admin', 'partner'], true)) {
-            $startedAt=(int)session('pending_2fa_started_at',0);
-            if ($startedAt <= 0 || now()->timestamp - $startedAt > 600) {
-                session()->forget(['pending_2fa_user','pending_2fa_verified','pending_2fa_started_at','pending_totp_secret','email_otp_login']);
-                $this->flash('Your sign-in verification expired. Please sign in again.','error');
-                return $this->go('login');
-            }
-            if ($user['status'] !== 'active' || empty($user['email']) || !filter_var($user['email'], FILTER_VALIDATE_EMAIL)) {
-                session()->forget(['pending_2fa_user','pending_2fa_verified','pending_2fa_started_at','pending_totp_secret','email_otp_login']);
-                $this->flash('This admin or partner account needs an active status and a valid email address to sign in.','error');
-                return $this->go('login');
-            }
-            $verified=session('pending_2fa_verified',[]);
-            if (!is_array($verified) || (int)session('pending_2fa_user') !== (int)$user['id']) $verified=['email'=>false,'authenticator'=>false];
-            $pendingSecret=session('pending_totp_secret');
-            $authenticatorSecret=$pendingSecret ?: ($user['totp_secret'] ?? null);
-            if ($request->isMethod('post')) {
-                $action=(string)$request->input('action');
-                if (in_array($action,['send_email','resend'],true) && empty($verified['email'])) {
-                    try { $this->issueEmailOtp($user,'login'); $this->flash($this->emailOtpDeliveryNotice($user['email'] ?? null,'sign-in'),'success'); }
-                    catch (Throwable $e) { $this->flash($e instanceof \RuntimeException ? $e->getMessage() : 'Could not send an email code. Check the mail settings and try again.','error'); }
-                } elseif ($action==='verify_email' && empty($verified['email'])) {
-                    if ($this->verifyEmailOtp($user,trim((string)$request->input('code')),'login')) {
-                        $verified['email']=true;
-                        $this->flash('Email verified. Complete the authenticator check to continue.','success');
-                    } else $this->flash('The email code is invalid or expired. Request a new code and try again.','error');
-                } elseif ($action==='verify_authenticator' && empty($verified['authenticator']) && $authenticatorSecret) {
-                    if ((new Google2FA())->verifyKey((string)$authenticatorSecret,trim((string)$request->input('code')))) {
-                        $verified['authenticator']=true;
-                        if ($pendingSecret) DB::table('users')->where('id',$user['id'])->update(['totp_secret'=>$pendingSecret]);
-                        $this->flash('Authenticator verified.','success');
-                    } else $this->flash('Invalid authenticator code. Please try again.','error');
-                } else {
-                    $this->flash('Complete both the email and authenticator checks before signing in.','error');
-                }
-                session()->put('pending_2fa_verified',$verified);
-                if (!empty($verified['email']) && !empty($verified['authenticator'])) {
-                    DB::table('users')->where('id',$user['id'])->update(['twofa_enabled'=>true,'twofa_method'=>'both']);
-                    return $this->finishLogin($user);
-                }
-            }
-            $emailChallenge=session('email_otp_login');
-            $emailPending=is_array($emailChallenge)&&(int)($emailChallenge['user_id']??0)===(int)$user['id'];
-            $secret=$pendingSecret ?: null;
-            $uri=$secret?(new Google2FA())->getQRCodeUrl('Mekenet Ekub',$user['email'] ?: $user['username'],$secret):null;
-            return $this->page('verify_login',[
-                'method'=>'required_both',
-                'email'=>$this->maskedEmail($user['email'] ?? null),
-                'email_pending'=>$emailPending,
-                'email_verified'=>!empty($verified['email']),
-                'authenticator_verified'=>!empty($verified['authenticator']),
-                'secret'=>$secret,
-                'uri'=>$uri,
-                'qr_data'=>$this->authenticatorQrData($uri),
-            ]);
-        }
-        if (!$user['twofa_enabled']) return $this->go('login');
+        if (! $user || ! $user['twofa_enabled']) return $this->go('login');
         $method=$user['twofa_method'] ?? 'authenticator';
         $emailAvailable=$this->hasEmailOtp($user); $authenticatorAvailable=$this->hasAuthenticator($user);
         if (!$emailAvailable && !$authenticatorAvailable) { session()->forget(['pending_2fa_user','email_otp_login']); $this->flash('Two-factor sign-in is not configured correctly. Contact the site administrator.','error'); return $this->go('login'); }
@@ -597,10 +442,6 @@ class WebsiteController
         $user=$this->currentUser(); if (! $user) return $this->go('login');
         if ($request->isMethod('post')) {
             if ($request->input('action') === 'disable') {
-                if (in_array($user['role'], ['admin', 'partner'], true)) {
-                    $this->flash('Email and authenticator verification are required for every admin and partner sign-in and cannot be disabled.','error');
-                    return $this->go('security_2fa');
-                }
                 DB::table('users')->where('id',$user['id'])->update(['twofa_enabled'=>false,'totp_secret'=>null,'twofa_method'=>'authenticator']);
                 session()->forget(['pending_totp_secret','email_otp_setup']);
                 $this->flash('Two-factor sign-in has been disabled. Password sign-in is active.','success');
@@ -623,21 +464,21 @@ class WebsiteController
         }
         $secret=session('pending_totp_secret'); $uri=$secret?(new Google2FA())->getQRCodeUrl('Mekenet Ekub',$user['email'] ?: $user['username'],$secret):null;
         $pending=session('email_otp_setup'); $emailPending=is_array($pending)&&(int)($pending['user_id']??0)===(int)$user['id'];
-        return $this->page('security_2fa',['secret'=>$secret,'uri'=>$uri,'qr_data'=>$this->authenticatorQrData($uri),'enabled'=>(bool)$user['twofa_enabled'],'method'=>$user['twofa_method']??'authenticator','authenticator_enabled'=>$this->hasAuthenticator($user),'email_enabled'=>$this->hasEmailOtp($user),'email'=>$this->maskedEmail($user['email']??null),'email_pending'=>$emailPending,'mandatory_for_role'=>in_array($user['role'],['admin','partner'],true)]);
+        return $this->page('security_2fa',['secret'=>$secret,'uri'=>$uri,'enabled'=>(bool)$user['twofa_enabled'],'method'=>$user['twofa_method']??'authenticator','authenticator_enabled'=>$this->hasAuthenticator($user),'email_enabled'=>$this->hasEmailOtp($user),'email'=>$this->maskedEmail($user['email']??null),'email_pending'=>$emailPending]);
     }
     public function confirm2fa(Request $request)
     {
         $user=$this->currentUser();
         if ($user && $this->verifyEmailOtp($user,trim((string)$request->input('code')),'setup')) {
-            $nextMethod=($this->hasAuthenticator($user) || (in_array($user['role'],['admin','partner'],true) && !empty($user['totp_secret'])))?'both':'email';
+            $nextMethod=$this->hasAuthenticator($user)?'both':'email';
             DB::table('users')->where('id',$user['id'])->update(['twofa_method'=>$nextMethod,'twofa_enabled'=>true]);
             session()->forget('pending_totp_secret');
-            $this->flash($nextMethod==='both'?(in_array($user['role'],['admin','partner'],true)?'Email and authenticator verification are enabled and both are required at every sign-in.':'Email OTP and your authenticator app are both enabled. You can use either at sign-in.'):'Email OTP is enabled. Future sign-ins will require a code sent to your email.','success');
+            $this->flash($nextMethod==='both'?'Email OTP and your authenticator app are both enabled. Choose either one at sign-in.':'Email OTP is enabled. Future sign-ins will require a code sent to your email.','success');
         } elseif ($user && ($secret=session('pending_totp_secret')) && (new Google2FA())->verifyKey($secret,trim((string)$request->input('code')))) {
             $nextMethod=$this->hasEmailOtp($user)?'both':'authenticator';
             DB::table('users')->where('id',$user['id'])->update(['twofa_method'=>$nextMethod,'totp_secret'=>$secret,'twofa_enabled'=>true]);
             session()->forget('pending_totp_secret');
-            $this->flash($nextMethod==='both'?(in_array($user['role'],['admin','partner'],true)?'Email and authenticator verification are enabled and both are required at every sign-in.':'Authenticator app verified. Email OTP and authenticator are both enabled; choose either at sign-in.'):'Authenticator verified and enabled. Future sign-ins will require your password and authenticator code.','success');
+            $this->flash($nextMethod==='both'?'Authenticator app verified. Email OTP and authenticator are both enabled; choose either at sign-in.':'Authenticator verified and enabled. Future sign-ins will require your password and authenticator code.','success');
         } else $this->flash('Code did not match or has expired. Try again or request a new email code.','error');
         return $this->go('security_2fa');
     }
@@ -646,25 +487,18 @@ class WebsiteController
     public function dashboardStats()
     {
         $id=session('user_id');
-        $availableCount = DB::table('ekubs')->whereIn('status',['open','started'])
-            ->whereRaw('(SELECT COALESCE(SUM(share_fraction), 0) FROM ekub_members WHERE ekub_members.ekub_id = ekubs.id) < ekubs.duration - 0.000001')
-            ->count();
-        return response()->json(['available_ekubs'=>$availableCount,'joined_ekubs'=>DB::table('ekub_members')->where('user_id',$id)->where('status','joined')->count(),'total_paid'=>(float)DB::table('payments')->where('user_id',$id)->where('status','approved')->sum('approved_amount')]);
+        return response()->json(['available_ekubs'=>DB::table('ekubs')->whereIn('status',['open','started'])->count(),'joined_ekubs'=>DB::table('ekub_members')->where('user_id',$id)->where('status','joined')->count(),'total_paid'=>(float)DB::table('payments')->where('user_id',$id)->where('status','approved')->sum('approved_amount')]);
     }
     public function dashboard()
     {
         $user=$this->currentUser();
         if ($user['role']==='admin') return $this->go('admin_dashboard');
         if ($user['role']==='partner') return $this->go('partner_dashboard');
-        $available=$this->rows(DB::table('ekubs')->whereIn('status',['open','started'])
-            ->whereRaw('(SELECT COALESCE(SUM(share_fraction), 0) FROM ekub_members WHERE ekub_members.ekub_id = ekubs.id) < ekubs.duration - 0.000001')
-            ->orderByDesc('id')->get());
+        $available=$this->rows(DB::table('ekubs')->whereIn('status',['open','started'])->orderByDesc('id')->get());
         $joined=$this->rows(DB::table('ekub_members as m')->join('ekubs as e','e.id','=','m.ekub_id')->where('m.user_id',$user['id'])->orderByDesc('m.id')->get(['e.*','m.share_type','m.share_fraction','m.contribution_amount','m.id as member_id']));
-        foreach ($available as &$ekub) $ekub['merchant_banner'] = $this->merchantBannerUrl($ekub);
+        foreach ($available as &$ekub) $ekub['merchant_banner'] = !empty($ekub['banner_image']) ? app(UploadStorage::class)->url((string)$ekub['banner_image']) : null;
         unset($ekub);
-        foreach ($joined as &$ekub) $ekub['merchant_banner'] = $this->merchantBannerUrl($ekub);
-        unset($ekub);
-        foreach($joined as &$ekub){$ekub['is_full']=$this->ekubs->isFull($ekub);}
+        foreach ($joined as &$ekub) $ekub['merchant_banner'] = !empty($ekub['banner_image']) ? app(UploadStorage::class)->url((string)$ekub['banner_image']) : null;
         unset($ekub);
         $celebrate=$this->rows(DB::table('payouts as p')->join('ekub_members as m','m.id','=','p.winner_member_id')->join('ekubs as e','e.id','=','p.ekub_id')->where('m.user_id',$user['id'])->where('p.celebrated',false)->orderBy('p.id')->get(['p.id','p.period_no','p.net_amount','e.name as ekub_name']));
         if ($celebrate) DB::table('payouts')->whereIn('id',array_column($celebrate,'id'))->update(['celebrated'=>true]);
@@ -676,249 +510,22 @@ class WebsiteController
     }
     public function profile()
     {
-        $user = $this->currentUser();
-        $merchant = $user ? $this->row(DB::table('merchants')->where('user_id', $user['id'])->first()) : null;
-        return $this->page('profile', ['user'=>$user,'merchant'=>$merchant,'edit_field'=>request()->query('edit')]);
-    }
-
-    private function merchantCategories(): array
-    {
-        return ['Hotel', 'Shop', 'Mini market', 'Super Market', 'Grocery', 'School', 'Import and Export', 'Drivers', 'Private Works'];
-    }
-
-    private function merchantForUser(int $userId): ?array
-    {
-        return $this->row(DB::table('merchants')->where('user_id', $userId)->first());
-    }
-
-    private function merchantInviteCode(): string
-    {
-        do { $code = strtoupper(Str::random(8)); }
-        while (DB::table('ekubs')->where('join_code', $code)->exists());
-        return $code;
-    }
-
-    private function merchantBannerUrl(array $ekub): ?string
-    {
-        if (empty($ekub['merchant_id'])) return null;
-        $images = json_decode((string) DB::table('merchant_ekub_ads')->where('ekub_id', $ekub['id'])->value('images'), true) ?: [];
-        return ! empty($images[0]) ? app(UploadStorage::class)->url((string) $images[0]) : null;
-    }
-
-    public function merchantPortal()
-    {
-        $user = $this->currentUser();
-        if (($user['role'] ?? null) !== 'member') return $this->go(($user['role'] ?? null) === 'admin' ? 'admin_merchants' : 'dashboard');
-        $merchant = $this->merchantForUser((int) $user['id']);
-        $ekubs = [];
-        $requests = [];
-        $commissions = [];
-        $earned = 0.0;
-        $pending = 0.0;
-        if ($merchant && $merchant['status'] === 'approved') {
-            $ekubs = $this->rows(DB::table('ekubs')->where('merchant_id', $merchant['id'])->orderByDesc('id')->get());
-            foreach ($ekubs as &$ekub) {
-                $ekub['members'] = $this->rows(DB::table('ekub_members as m')->join('users as u','u.id','=','m.user_id')->where('m.ekub_id',$ekub['id'])->orderBy('m.id')->get(['u.first_name','u.last_name','u.username','u.phone','u.profile_picture','m.contribution_amount','m.share_type','m.joined_at']));
-                $ekub['requests'] = $this->rows(DB::table('merchant_join_requests as r')->join('users as u','u.id','=','r.user_id')->where('r.ekub_id',$ekub['id'])->where('r.status','pending')->orderBy('r.id')->get(['r.id','r.share_type','r.created_at','u.first_name','u.last_name','u.username','u.phone']));
-                $requests = array_merge($requests, $ekub['requests']);
-                $ekub['ad'] = $this->row(DB::table('merchant_ekub_ads')->where('ekub_id',$ekub['id'])->first());
-                if ($ekub['ad']) $ekub['ad']['images'] = array_map(fn ($image) => app(UploadStorage::class)->url($image), json_decode($ekub['ad']['images'] ?? '[]', true) ?: []);
-            }
-            unset($ekub);
-            $commissions = $this->rows(DB::table('merchant_commissions as c')->join('ekubs as e','e.id','=','c.ekub_id')->where('c.merchant_id',$merchant['id'])->orderByDesc('c.id')->limit(100)->get(['c.*','e.name as ekub_name']));
-            $earned = (float) DB::table('merchant_commissions')->where('merchant_id',$merchant['id'])->sum('commission_amount');
-            $pending = (float) DB::table('merchant_commissions')->where('merchant_id',$merchant['id'])->where('status','pending')->sum('commission_amount');
-        }
-        return $this->page('merchant_portal', ['user'=>$user,'merchant'=>$merchant,'business_categories'=>$this->merchantCategories(),'frequencies'=>config('ekub.frequencies'),'ekubs'=>$ekubs,'requests'=>$requests,'commissions'=>$commissions,'earned'=>$earned,'pending_commission'=>$pending]);
-    }
-
-    public function merchantApply(Request $request)
-    {
-        $user = $this->currentUser();
-        if (($user['role'] ?? null) !== 'member') { $this->flash('Only member accounts can apply for merchant access.','error'); return $this->go('profile'); }
-        if (($user['kyc_status'] ?? null) !== 'approved') { $this->flash('Complete identity verification and wait for admin approval before applying as a merchant.','error'); return $this->go('kyc'); }
-        $existing = $this->merchantForUser((int) $user['id']);
-        if ($existing && $existing['status'] === 'approved') return $this->go('merchant_portal');
-        $tinRule = Rule::unique('merchants','tin');
-        if ($existing) $tinRule->ignore($existing['id']);
-        $data = $request->validate([
-            'business_name'=>['required','string','min:2','max:160'],
-            'tin'=>['required','regex:/^\d{10}$/',$tinRule],
-            'category'=>['required','in:'.implode(',', $this->merchantCategories())],
-            'contact_name'=>['required','string','min:2','max:160'],
-            'business_phone'=>['required','string','min:9','max:32'],
-            'business_email'=>['nullable','email','max:190'],
-            'address'=>['required','string','min:4','max:255'],
-            'website_url'=>['nullable','url','max:255'],
-            'tin_document'=>['nullable','file','mimes:pdf,jpg,jpeg,png,webp','max:1024'],
+        $rating = DB::table('site_ratings')->where('user_id', session('user_id'))->first(['rating', 'comment']);
+        return $this->page('profile', [
+            'user' => $this->currentUser(),
+            'edit_field' => request()->query('edit'),
+            'site_rating' => $rating?->rating,
+            'site_comment' => $rating?->comment ?? '',
         ]);
-        $location = app(LocationGeocoder::class)->geocode($data['address']);
-        if (! $location) {
-            $this->flash('We could not find that business location. Include the area and city, such as “Bole, Addis Ababa”, then try again.','error');
-            return $this->go('merchant_portal');
-        }
-        $document = $existing['tin_document'] ?? null;
-        $oldDocument = $document;
-        if ($request->file('tin_document')) {
-            $document = $this->saveUpload($request->file('tin_document'), 'merchant_tin', 'tin-'.$user['id'], ['pdf','jpg','jpeg','png','webp'], $user);
-        }
-        $values = [
-            'business_name'=>trim($data['business_name']),'tin'=>$data['tin'],'category'=>$data['category'],
-            'contact_name'=>trim($data['contact_name']),'business_phone'=>trim($data['business_phone']),
-            'business_email'=>$data['business_email'] ?? null,'address'=>trim($data['address']),
-            'website_url'=>$data['website_url'] ?? null,'location_lat'=>$location['latitude'],
-            'location_lng'=>$location['longitude'],'tin_document'=>$document,'status'=>'pending',
-            'rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null,'reviewed_by'=>null,'updated_at'=>now(),
-        ];
-        if ($existing) DB::table('merchants')->where('id',$existing['id'])->update($values);
-        else DB::table('merchants')->insert($values + ['user_id'=>$user['id'],'created_at'=>now()]);
-        if ($request->file('tin_document') && $oldDocument && $oldDocument !== $document) app(UploadStorage::class)->delete($oldDocument);
-        $this->flash('Merchant application submitted for admin review.','success');
-        return $this->go('merchant_portal');
     }
-
-    public function merchantCreateEkub(Request $request)
+    public function rateWebsite(Request $request)
     {
-        $user = $this->currentUser();
-        $merchant = $this->merchantForUser((int) $user['id']);
-        if (! $merchant || $merchant['status'] !== 'approved') return $this->page('error',['code'=>403,'message'=>'An approved merchant account is required.']);
-        $data = $request->validate([
-            'name'=>['required','string','min:2','max:120'],
-            'frequency'=>['required','in:'.implode(',',config('ekub.frequencies'))],
-            'base_amount'=>['required','numeric','gt:0','max:100000000'],
-            'duration'=>['required','integer','min:2','max:500'],
-            'banner_image'=>['nullable','file','image','mimes:jpg,jpeg,png,webp','max:1024'],
-        ]);
-        if (! in_array($merchant['category'], $this->merchantCategories(), true)) {
-            return $this->page('error',['code'=>422,'message'=>'Your approved merchant category is invalid. Contact an administrator.']);
-        }
-        $bannerPath = $request->file('banner_image')
-            ? $this->imageUpload($request->file('banner_image'), 'merchant_banners', 'merchant-'.$merchant['id'].'-banner', $user)
-            : null;
-        try {
-            $id = DB::transaction(function () use ($data, $merchant, $bannerPath): int {
-                $id = $this->insertEkub(trim($data['name']),$merchant['category'],$data['frequency'],(float)$data['base_amount'],(int)$data['duration'],false,[],null,(int)$merchant['id'],$this->merchantInviteCode());
-                DB::table('merchant_ekub_ads')->insert([
-                    'ekub_id'=>$id,'merchant_id'=>$merchant['id'],'title'=>$merchant['business_name'],
-                    'description'=>null,'images'=>json_encode($bannerPath ? [$bannerPath] : []),
-                    'website_url'=>$merchant['website_url'],'location_name'=>$merchant['address'],
-                    'latitude'=>$merchant['location_lat'],'longitude'=>$merchant['location_lng'],
-                    'created_at'=>now(),'updated_at'=>now(),
-                ]);
-                return $id;
-            });
-        } catch (Throwable $e) {
-            if ($bannerPath) app(UploadStorage::class)->delete($bannerPath);
-            throw $e;
-        }
-        $this->flash($bannerPath ? 'Private Ekub created with its banner. Share the invite code with the people you want to invite.' : 'Private Ekub created. You can add a banner in the Ekub advertisement section.','success');
-        return $this->go('merchant_portal',['ekub'=>$id]);
-    }
-
-    public function merchantJoinDecision(int $requestId, string $action)
-    {
-        $user = $this->currentUser();
-        $merchant = $this->merchantForUser((int) $user['id']);
-        $join = DB::table('merchant_join_requests')->where('id',$requestId)->where('merchant_id',$merchant['id'] ?? 0)->where('status','pending')->first();
-        if (! $merchant || ! $join || ! in_array($action,['approve','reject'],true)) {
-            $this->flash('Pending join request not found.','error');
-            return $this->go('merchant_portal');
-        }
-        try {
-            DB::transaction(function () use ($join,$merchant,$user,$action): void {
-                $requestRow = DB::table('merchant_join_requests')->where('id',$join->id)->lockForUpdate()->first();
-                if (! $requestRow || $requestRow->status !== 'pending') throw new \RuntimeException('This join request was already reviewed.');
-                if ($action === 'reject') {
-                    DB::table('merchant_join_requests')->where('id',$join->id)->update(['status'=>'rejected','reviewed_at'=>now(),'reviewed_by'=>$user['id']]);
-                    return;
-                }
-                if (DB::table('users')->where('id',$join->user_id)->value('kyc_status') !== 'approved') throw new \RuntimeException('This member must have approved identity verification before joining.');
-                $ekub = DB::table('ekubs')->where('id',$join->ekub_id)->where('merchant_id',$merchant['id'])->lockForUpdate()->first();
-                if (! $ekub || $ekub->status !== 'open') throw new \RuntimeException('This Ekub is no longer accepting member approvals.');
-                if (DB::table('ekub_members')->where('ekub_id',$join->ekub_id)->where('user_id',$join->user_id)->exists()) throw new \RuntimeException('This person is already a member.');
-                $fraction = ['full'=>1.0,'half'=>0.5,'quarter'=>0.25][$join->share_type] ?? 1.0;
-                $used = (float) DB::table('ekub_members')->where('ekub_id',$join->ekub_id)->sum('share_fraction');
-                if ($used + $fraction > (float)$ekub->duration + 0.000001) throw new \RuntimeException('The Ekub has no remaining capacity for this share.');
-                DB::table('ekub_members')->insert(['ekub_id'=>$join->ekub_id,'user_id'=>$join->user_id,'share_type'=>$join->share_type,'share_fraction'=>$fraction,'contribution_amount'=>round((float)$ekub->base_amount*$fraction,2),'status'=>'joined','joined_at'=>now()]);
-                DB::table('merchant_join_requests')->where('id',$join->id)->update(['status'=>'approved','reviewed_at'=>now(),'reviewed_by'=>$user['id']]);
-                DB::table('member_notifications')->insertOrIgnore(['user_id'=>$join->user_id,'type'=>'merchant_join_approved','title'=>'Your Ekub request was approved','body'=>'Your request to join '.$ekub->name.' was approved. You can now view payment periods and submit payments.','event_key'=>'merchant.join.approved:'.$join->id.':'.now()->timestamp,'created_at'=>now()]);
-            });
-            $this->flash($action === 'approve' ? 'Member approved. Payment approval remains with admin.' : 'Join request rejected.','success');
-        } catch (Throwable $e) { $this->flash($e->getMessage(),'error'); }
-        return $this->go('merchant_portal');
-    }
-
-    public function merchantSaveAd(int $ekubId, Request $request)
-    {
-        $user = $this->currentUser();
-        $merchant = $this->merchantForUser((int)$user['id']);
-        $ekub = DB::table('ekubs')->where('id',$ekubId)->where('merchant_id',$merchant['id'] ?? 0)->first();
-        if (! $merchant || $merchant['status'] !== 'approved' || ! $ekub) return $this->page('error',['code'=>403,'message'=>'You can only edit ads for your own Ekubs.']);
-        $data = $request->validate([
-            'title'=>['required','string','min:2','max:160'],'description'=>['nullable','string','max:3000'],
-            'website_url'=>['nullable','url','max:255'],'location_name'=>['nullable','string','max:255'],
-            'images'=>['nullable','array','max:3'],'images.*'=>['file','image','mimes:jpg,jpeg,png,webp','max:1024'],
-        ]);
-        $locationName = trim((string) ($data['location_name'] ?? ''));
-        $location = $locationName !== '' ? app(LocationGeocoder::class)->geocode($locationName) : null;
-        if ($locationName !== '' && ! $location) {
-            $this->flash('We could not find that ad location. Add the area and city, then try again.','error');
-            return $this->go('merchant_portal',['ekub'=>$ekubId]);
-        }
-        $old = $this->row(DB::table('merchant_ekub_ads')->where('ekub_id',$ekubId)->first());
-        $images = $old ? (json_decode($old['images'] ?? '[]',true) ?: []) : [];
-        $newImages = [];
-        foreach ($request->file('images',[]) as $index=>$file) {
-            $path = $this->imageUpload($file,'merchant_ads','merchant-'.$merchant['id'].'-ekub-'.$ekubId.'-'.($index+1),$user);
-            if ($path) { $newImages[]=$path; $images[$index]=$path; }
-        }
-        $images = array_slice(array_values($images),0,3);
-        $values = ['merchant_id'=>$merchant['id'],'title'=>trim($data['title']),'description'=>$data['description'] ?? null,'images'=>json_encode($images),'website_url'=>$data['website_url'] ?? null,'location_name'=>$locationName ?: $merchant['address'],'latitude'=>$location['latitude'] ?? $merchant['location_lat'],'longitude'=>$location['longitude'] ?? $merchant['location_lng'],'updated_at'=>now()];
-        DB::table('merchant_ekub_ads')->updateOrInsert(['ekub_id'=>$ekubId],$values + ['created_at'=>$old['created_at'] ?? now()]);
-        if ($old) foreach (json_decode($old['images'] ?? '[]',true) ?: [] as $image) if (!in_array($image,$images,true)) app(UploadStorage::class)->delete($image);
-        $this->flash('Your Ekub ad was saved.','success');
-        return $this->go('merchant_portal',['ekub'=>$ekubId]);
-    }
-
-    public function adminMerchants()
-    {
-        $rows = $this->rows(DB::table('merchants as m')->join('users as u','u.id','=','m.user_id')->orderByRaw("CASE WHEN m.status = 'pending' THEN 0 ELSE 1 END")->orderByDesc('m.submitted_at')->get(['m.*','u.username','u.email as account_email','u.phone as account_phone']));
-        foreach ($rows as &$merchant) {
-            $merchant['ekub_count'] = DB::table('ekubs')->where('merchant_id',$merchant['id'])->count();
-            $merchant['commission_pending'] = (float) DB::table('merchant_commissions')->where('merchant_id',$merchant['id'])->where('status','pending')->sum('commission_amount');
-            $merchant['tin_document_url'] = $merchant['tin_document'] ? app(UploadStorage::class)->url($merchant['tin_document']) : null;
-        }
-        unset($merchant);
-        $commissions = $this->rows(DB::table('merchant_commissions as c')->join('merchants as m','m.id','=','c.merchant_id')->join('ekubs as e','e.id','=','c.ekub_id')->orderByRaw("CASE WHEN c.status = 'pending' THEN 0 ELSE 1 END")->orderByDesc('c.id')->limit(300)->get(['c.*','m.business_name','e.name as ekub_name']));
-        $pendingCount = count(array_filter($rows, fn ($row) => $row['status'] === 'pending'));
-        $approvedCount = count(array_filter($rows, fn ($row) => $row['status'] === 'approved'));
-        return $this->page('admin_merchants',['merchants'=>$rows,'commissions'=>$commissions,'pending_count'=>$pendingCount,'approved_count'=>$approvedCount]);
-    }
-
-    public function adminMerchantDecision(int $merchantId, string $action, Request $request)
-    {
-        $merchant = DB::table('merchants')->where('id',$merchantId)->first();
-        if (! $merchant || $merchant->status !== 'pending' || ! in_array($action,['approve','reject'],true)) {
-            $this->flash('Pending merchant application not found.','error'); return $this->go('admin_merchants');
-        }
-        $reason = trim((string)$request->input('reason'));
-        if ($action === 'reject' && $reason === '') { $this->flash('Enter a reason when rejecting an application.','error'); return $this->go('admin_merchants'); }
-        DB::table('merchants')->where('id',$merchantId)->update(['status'=>$action==='approve'?'approved':'rejected','rejection_reason'=>$action==='reject'?$reason:null,'reviewed_at'=>now(),'reviewed_by'=>session('user_id'),'updated_at'=>now()]);
-        DB::table('member_notifications')->insertOrIgnore(['user_id'=>$merchant->user_id,'type'=>'merchant_application_'.$action,'title'=>$action==='approve'?'Merchant account approved':'Merchant application needs changes','body'=>$action==='approve'?'Your merchant account was approved. You can now create private Ekubs and manage invite requests.':'Your merchant application was rejected: '.$reason,'event_key'=>'merchant.application.'.$merchantId.'.'.$action.':'.now()->timestamp,'created_at'=>now()]);
-        $this->flash($action==='approve'?'Merchant application approved.':'Merchant application rejected.','success');
-        return $this->go('admin_merchants');
-    }
-
-    public function adminPayMerchantCommission(int $commissionId)
-    {
-        $commission = DB::table('merchant_commissions')->where('id',$commissionId)->where('status','pending')->first();
-        $updated = $commission ? DB::table('merchant_commissions')->where('id',$commissionId)->where('status','pending')->update(['status'=>'paid','paid_at'=>now(),'paid_by'=>session('user_id')]) : 0;
-        if ($updated) {
-            $owner = DB::table('merchants')->where('id',$commission->merchant_id)->value('user_id');
-            if ($owner) DB::table('member_notifications')->insertOrIgnore(['user_id'=>$owner,'type'=>'merchant_commission_paid','title'=>'Merchant commission marked paid','body'=>number_format((float)$commission->commission_amount,2).' ETB commission for Ekub #'.$commission->ekub_id.' Period '.$commission->period_no.' was marked as paid by an administrator.','event_key'=>'merchant.commission.paid:'.$commissionId,'created_at'=>now()]);
-        }
-        $this->flash($updated ? 'Merchant commission marked paid.' : 'Pending commission not found.','success');
-        return $this->go('admin_merchants');
+        $data=$request->validate(['rating'=>['required','integer','between:1,5'],'comment'=>['nullable','string','max:1000']]);
+        DB::table('site_ratings')->updateOrInsert(['user_id'=>session('user_id')],['rating'=>(int)$data['rating'],'comment'=>trim((string)($data['comment']??''))?:null,'updated_at'=>now()]);
+        $this->flash('Thank you for rating Mekenet Ekub.','success');
+        $returnTo = (string) $request->input('return_to', '/profile#website-rating');
+        if (! in_array($returnTo, ['/', '/profile#website-rating'], true)) $returnTo = '/profile#website-rating';
+        return redirect($returnTo);
     }
     public function profileEdit(string $field, Request $request)
     {
@@ -933,15 +540,7 @@ class WebsiteController
     }
     public function profilePicture(Request $request)
     {
-        try {
-            $user = $this->currentUser();
-            $oldPicture = $user['profile_picture'] ?? null;
-            $picture = $this->imageUpload($request->file('profile_picture'), 'profile', 'profile-picture', $user);
-            if (!$picture) throw new \RuntimeException('Choose an image first.');
-            DB::table('users')->where('id',$user['id'])->update(['profile_picture'=>$picture]);
-            if ($oldPicture && $oldPicture !== $picture) app(UploadStorage::class)->delete($oldPicture);
-            $this->flash('Profile picture updated.','success');
-        }
+        try { $picture=$this->imageUpload($request->file('profile_picture')); if(!$picture) throw new \RuntimeException('Choose an image first.'); DB::table('users')->where('id',session('user_id'))->update(['profile_picture'=>$picture]); $this->flash('Profile picture updated.','success'); }
         catch(Throwable $e){$this->flash($e->getMessage(),'error');}
         return $this->go('profile');
     }
@@ -954,23 +553,27 @@ class WebsiteController
             $saved=[]; $name=trim((string)$request->input('full_name')); $idType=(string)$request->input('id_type');
             try {
                 if(!in_array($idType,['National ID','Passport'],true)) throw new \RuntimeException('Please choose an ID type.');
-                if((string)$request->input('rules_accepted')!=='1') throw new \RuntimeException('Accept the Mekenet Ekub Rules before submitting.');
-                if((string)$request->input('liveness_verified')!=='1') throw new \RuntimeException('Pass the in-page live face check before submitting.');
+                $dob=trim((string)$request->input('dob'));
+                if(!preg_match('/^\d{4}-\d{2}-(\d{2})$/',$dob,$dobDay)||!checkdate((int)substr($dob,5,2),(int)$dobDay[1],(int)substr($dob,0,4))||(int)$dobDay[1]>30||$dob>=now()->toDateString()) throw new \RuntimeException('Enter a valid date of birth with a day from 01 to 30.');
                 $rawDob=trim((string)$request->input('dob'));
                 $parsedDob=\DateTimeImmutable::createFromFormat('!Y-m-d',$rawDob);
                 $dobErrors=\DateTimeImmutable::getLastErrors();
                 if(!$parsedDob || ($dobErrors!==false && ($dobErrors['warning_count']>0 || $dobErrors['error_count']>0)) || $parsedDob->format('Y-m-d')!==$rawDob || $parsedDob>=new \DateTimeImmutable('today')) throw new \RuntimeException('Enter a valid date of birth before today.');
-                $videoDuration=$request->input('video_duration_seconds');
-                if(!is_numeric($videoDuration) || (float)$videoDuration<5 || (float)$videoDuration>10) throw new \RuntimeException('The agreement video must be between 5 and 10 seconds.');
+                if((string)$request->input('rules_accepted')!=='1') throw new \RuntimeException('Accept the Mekenet Ekub Rules before submitting.');
+                if((string)$request->input('liveness_verified')!=='1') throw new \RuntimeException('Complete the live face check before submitting.');
+                $video=$request->file('video_agreement');
+                $videoDuration=(float)$request->input('video_duration_seconds',0);
+                if(!$video || $videoDuration<5 || $videoDuration>10) throw new \RuntimeException('Record or upload an agreement video between 5 and 10 seconds.');
+                VideoDuration::assertAgreementLength($video);
                 $base=preg_replace('/\D/','',(string)$user['phone']);
-                $photo=$this->imageUpload($request->file('personal_photo'),'kyc/personal_photo',$name.'_'.$base.'_photo',$user); if($photo)$saved[]=$photo;
-                $front=$this->imageUpload($request->file('id_front'),'kyc/id_passport',$name.'_'.$base.($idType==='Passport'?'_passport':'_id-front'),$user); if($front)$saved[]=$front;
-                $back=$idType==='National ID' ? $this->imageUpload($request->file('id_back'),'kyc/id_passport',$name.'_'.$base.'_id-back',$user) : null; if($back)$saved[]=$back;
-                $video=$this->saveUpload($request->file('video_agreement'),'kyc/video',$name.'_'.$base.'_video',['mp4','mov','webm'],$user); if($video)$saved[]=$video;
+                $photo=$this->saveUserUpload($request->file('personal_photo'),$user,'kyc',$name.'_'.$base.'_photo',['png','jpg','jpeg','webp','gif']); if($photo)$saved[]=$photo;
+                $front=$this->saveUserUpload($request->file('id_front'),$user,'kyc',$name.'_'.$base.($idType==='Passport'?'_passport':'_id-front'),['png','jpg','jpeg','webp','gif']); if($front)$saved[]=$front;
+                $back=$idType==='National ID' ? $this->saveUserUpload($request->file('id_back'),$user,'kyc',$name.'_'.$base.'_id-back',['png','jpg','jpeg','webp','gif']) : null; if($back)$saved[]=$back;
+                $agreement=$this->saveUserUpload($video,$user,'kyc/videos',$name.'_'.$base.'_agreement',['mp4','mov','webm']); if($agreement)$saved[]=$agreement;
                 if(!$photo) throw new \RuntimeException('Personal photo is required.');
                 if(!$front || ($idType==='National ID' && !$back)) throw new \RuntimeException($idType==='National ID'?'National ID requires both the front and back images.':'Passport requires one image.');
-                if(!$video) throw new \RuntimeException('Video agreement is required.');
-                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$parsedDob->format('Y-m-d'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$video,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
+                if(!$agreement) throw new \RuntimeException('Agreement video is required.');
+                DB::table('kyc_verifications')->updateOrInsert(['user_id'=>$user['id']],['full_name'=>$name,'dob'=>$parsedDob->format('Y-m-d'),'gender'=>$request->input('gender'),'id_type'=>$idType,'id_number'=>$request->input('id_number'),'id_front'=>$front,'id_back'=>$back,'liveness_verified'=>true,'liveness_video'=>null,'video_agreement'=>$agreement,'rules_accepted'=>true,'personal_photo'=>$photo,'status'=>'pending','rejection_reason'=>null,'submitted_at'=>now(),'reviewed_at'=>null]);
                 DB::table('users')->where('id',$user['id'])->update(['kyc_status'=>'pending']);
                 $this->flash('KYC submitted. Please wait for approval.','success'); return $this->go('kyc');
             } catch(Throwable $e) { foreach($saved as $file) app(UploadStorage::class)->delete($file); $this->flash($e->getMessage(),'error'); }
@@ -982,29 +585,18 @@ class WebsiteController
     {
         $user=$this->currentUser(); if($user['kyc_status']!=='approved') return $this->page('kyc_required');
         $ekub=$this->row(DB::table('ekubs')->where('id',$ekubId)->first()); if(!$ekub)return response()->view('error',['code'=>404,'message'=>'Ekub not found'],404);
-        if ($this->ekubs->isFull($ekub)) { $this->flash('This Ekub is full. It is now available only to its members.','error'); return $this->go('ekubs'); }
         if($request->isMethod('post')) {
             $share=$ekub['is_item'] ? 'full' : (string)$request->input('share_type','full'); $fraction=['full'=>1.0,'half'=>0.5,'quarter'=>0.25][$share] ?? 0;
             if(!$fraction || ($ekub['is_item'] && $share!=='full')) {$this->flash('Invalid share selection.','error');return $this->go('join_ekub',['ekub_id'=>$ekubId]);}
-            if (! empty($ekub['merchant_id'])) {
-                try {
-                    $merchant = DB::table('merchants')->where('id',$ekub['merchant_id'])->where('status','approved')->first();
-                    if (! $merchant || ! hash_equals((string)$ekub['join_code'], strtoupper(trim((string)$request->input('join_code'))))) throw new \RuntimeException('Invite code is incorrect. Ask this merchant for the code.');
-                    DB::transaction(function () use ($ekub,$ekubId,$user,$share): void {
-                        $locked=DB::table('ekubs')->where('id',$ekubId)->lockForUpdate()->first();
-                        if (! $locked || $locked->status !== 'open') throw new \RuntimeException('This Ekub has already started or is closed.');
-                        if (DB::table('ekub_members')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->exists()) throw new \RuntimeException('You already joined this Ekub.');
-                        $existing=DB::table('merchant_join_requests')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->first();
-                        if ($existing && $existing->status === 'pending') throw new \RuntimeException('Your join request is already waiting for merchant approval.');
-                        $values=['merchant_id'=>$ekub['merchant_id'],'share_type'=>$share,'status'=>'pending','created_at'=>now(),'reviewed_at'=>null,'reviewed_by'=>null];
-                        if ($existing) DB::table('merchant_join_requests')->where('id',$existing->id)->update($values);
-                        else DB::table('merchant_join_requests')->insert($values + ['ekub_id'=>$ekubId,'user_id'=>$user['id']]);
-                        $owner=DB::table('merchants')->where('id',$ekub['merchant_id'])->value('user_id');
-                        if ($owner) DB::table('member_notifications')->insertOrIgnore(['user_id'=>$owner,'type'=>'merchant_join_request','title'=>'New Ekub join request','body'=>'@'.$user['username'].' requested to join '.$ekub['name'].'. Review this request in your merchant dashboard.','event_key'=>'merchant.join.request:'.$ekubId.':'.$user['id'],'created_at'=>now()]);
-                    });
-                    $this->flash('Join request sent. The merchant will review it.','success');
-                    return $this->go('ekub_detail',['ekub_id'=>$ekubId]);
-                } catch(Throwable $e) { $this->flash($e->getMessage(),'error'); return $this->go('join_ekub',['ekub_id'=>$ekubId]); }
+            if(!empty($ekub['merchant_id'])){
+                if($ekub['status']!=='open' || $this->ekubs->isFull($ekub)){$this->flash('This Ekub is no longer accepting members.','error');return $this->go('ekub_detail',['ekub_id'=>$ekubId]);}
+                $code=strtoupper(trim((string)$request->input('invite_code')));
+                if(!$code||!hash_equals((string)$ekub['invite_code'],$code)){$this->flash('Enter the invite code shared by the merchant.','error');return $this->go('join_ekub',['ekub_id'=>$ekubId]);}
+                if(DB::table('ekub_members')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->exists()){$this->flash('You already joined this Ekub.','error');return $this->go('ekub_detail',['ekub_id'=>$ekubId]);}
+                $existing=DB::table('merchant_join_requests')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->first();
+                if($existing&&$existing->status==='pending'){$this->flash('Your request is waiting for merchant approval.','message');return $this->go('ekub_detail',['ekub_id'=>$ekubId]);}
+                DB::table('merchant_join_requests')->updateOrInsert(['ekub_id'=>$ekubId,'user_id'=>$user['id']],['merchant_id'=>$ekub['merchant_id'],'share_type'=>$share,'status'=>'pending','created_at'=>now(),'reviewed_at'=>null]);
+                $this->flash('Join request sent. The merchant must approve it before you are added.','success');return $this->go('ekub_detail',['ekub_id'=>$ekubId]);
             }
             try { DB::transaction(function() use($ekub,$ekubId,$user,$share,$fraction) {
                 $locked=DB::table('ekubs')->where('id',$ekubId)->lockForUpdate()->first();
@@ -1017,8 +609,7 @@ class WebsiteController
             catch(Throwable $e){$this->flash($e->getMessage(),'error');return $this->go('ekub_detail',['ekub_id'=>$ekubId]);}
         }
         if($ekub['status']!=='open' || $this->ekubs->isFull($ekub)) { $this->flash($ekub['status']!=='open'?'This Ekub has already started or is closed.':'This Ekub is full. No more members can be added.','error'); return $this->go('ekub_detail',['ekub_id'=>$ekubId]); }
-        $joinRequest = ! empty($ekub['merchant_id']) ? $this->row(DB::table('merchant_join_requests')->where('ekub_id',$ekubId)->where('user_id',$user['id'])->first()) : null;
-        return $this->page('join_ekub',['ekub'=>$ekub,'merchant_owned'=>!empty($ekub['merchant_id']),'join_request'=>$joinRequest]);
+        return $this->page('join_ekub',['ekub'=>$ekub]);
     }
     public function joinLegacy(Request $request)
     {
@@ -1029,10 +620,7 @@ class WebsiteController
     public function myEkubs()
     {
         $user=$this->currentUser(); if(in_array($user['role'],['admin','partner'],true)) return $this->go($user['role']==='admin'?'admin_dashboard':'partner_dashboard');
-        $rows=$this->rows(DB::table('ekub_members as em')->join('ekubs as e','e.id','=','em.ekub_id')->where('em.user_id',$user['id'])->orderByDesc('em.id')->get(['e.*','em.id as member_id','em.share_type','em.share_fraction','em.contribution_amount','em.status as member_status']));
-        foreach($rows as &$ekub){$ekub['is_full']=$this->ekubs->isFull($ekub);}
-        unset($ekub);
-        return $this->page('my_ekubs',['rows'=>$rows]);
+        return $this->page('my_ekubs',['rows'=>$this->rows(DB::table('ekub_members as em')->join('ekubs as e','e.id','=','em.ekub_id')->where('em.user_id',$user['id'])->orderByDesc('em.id')->get(['e.*','em.id as member_id','em.share_type','em.share_fraction','em.contribution_amount','em.status as member_status']))]);
     }
     public function leaveEkub(int $ekubId)
     {
@@ -1114,7 +702,7 @@ class WebsiteController
                 return $this->go($sameOwner ? 'status' : 'pay', $sameOwner ? [] : ['ekub_id' => $ekubId, 'period_no' => $periodNo]);
             }
 
-            $screenshot = $this->saveUpload($upload, 'payments', null, array_keys($allowedReceiptMimes), $user);
+            $screenshot = $this->saveUpload($upload, null, null, array_keys($allowedReceiptMimes));
             $currency = $isBinance ? 'USDT' : 'ETB';
             $currencyAmount = $isBinance ? round($amount / $exchangeRate, 8) : $amount;
             DB::table('payments')->insert([
@@ -1175,6 +763,12 @@ class WebsiteController
         if($fullOnly!==null)$ekubs=array_values(array_filter($ekubs,fn($e)=>(bool)$e['is_full']===$fullOnly));
         return $ekubs;
     }
+    public function adminDashboard()
+    {
+        $all=$this->adminEkubRows();
+        $ekubs=array_values(array_filter($all,fn($e)=>!$e['is_full']));
+        return $this->page('admin_dashboard',['ekubs'=>$ekubs,'full_count'=>count($all)-count($ekubs),'pending'=>DB::table('payments')->where('status','pending')->count(),'kycs'=>DB::table('kyc_verifications')->where('status','pending')->count(),'partners'=>DB::table('partners')->count()]);
+    }
     public function adminNavigationCounts(): array
     {
         $counts = [
@@ -1211,48 +805,124 @@ class WebsiteController
 
         return $counts;
     }
-    public function adminDashboard()
-    {
-        $all=$this->adminEkubRows();
-        $ekubs=array_values(array_filter($all,fn($e)=>!$e['is_full']));
-        return $this->page('admin_dashboard',['ekubs'=>$ekubs,'full_count'=>count($all)-count($ekubs),'pending'=>DB::table('payments')->where('status','pending')->count(),'kycs'=>DB::table('kyc_verifications')->where('status','pending')->count(),'partners'=>DB::table('partners')->count()]);
-    }
     public function adminTools()
     {
         return $this->page('admin_tools');
     }
-    public function adminVisits()
+    public function adminAnalytics()
     {
-        try {
-            $summary = app(VisitTracker::class)->summary();
-            $available = true;
-        } catch (Throwable $e) {
-            Log::warning('Could not load visit analytics. Run database migrations.', ['error' => $e->getMessage()]);
-            $available = false;
-            $zero = ['total' => 0, 'members' => 0, 'guests' => 0];
-            $summary = array_fill_keys(['day', 'week', 'month', 'year'], ['website' => $zero, 'app' => $zero, 'new_members' => 0]);
+        $periods=[
+            'Daily'=>[now()->startOfDay(),now()->endOfDay()],
+            'Weekly'=>[now()->startOfWeek(),now()->endOfWeek()],
+            'Monthly'=>[now()->startOfMonth(),now()->endOfMonth()],
+            'Yearly'=>[now()->startOfYear(),now()->endOfYear()],
+        ];
+        $analytics=[];
+        foreach($periods as $label=>[$start,$end]){
+            $dates=[$start->toDateString(),$end->toDateString()];
+            $visits=static fn(string $source)=>DB::table('site_visits')->where('source',$source)->whereBetween('visit_date',$dates);
+            $analytics[]=[
+                'label'=>$label,
+                'app_visitors'=>(int)$visits('app')->distinct()->count('visitor_hash'),
+                'website_visitors'=>(int)$visits('website')->distinct()->count('visitor_hash'),
+                'app_members'=>(int)$visits('app')->whereNotNull('member_user_id')->distinct()->count('member_user_id'),
+                'website_members'=>(int)$visits('website')->whereNotNull('member_user_id')->distinct()->count('member_user_id'),
+                'app_other'=>(int)$visits('app')->whereNull('member_user_id')->distinct()->count('visitor_hash'),
+                'website_other'=>(int)$visits('website')->whereNull('member_user_id')->distinct()->count('visitor_hash'),
+                'new_members'=>(int)DB::table('users')->where('role','member')->whereBetween('created_at',[$start,$end])->count(),
+            ];
         }
-
-        try {
-            $registeredMembers = DB::table('users')->where('role', 'member')->count();
-            $rating = DB::table('website_ratings')->where('visible', true)
-                ->selectRaw('COUNT(*) as count, COALESCE(AVG(rating), 0) as average')->first();
-            $ratingCount = (int) ($rating->count ?? 0);
-            $ratingAverage = round((float) ($rating->average ?? 0), 1);
-        } catch (Throwable $e) {
-            Log::warning('Could not load Visits page summaries.', ['error' => $e->getMessage()]);
-            $registeredMembers = 0;
-            $ratingCount = 0;
-            $ratingAverage = 0;
+        return $this->page('admin_analytics',['analytics'=>$analytics,'members'=>DB::table('users')->where('role','member')->count(),'ratings'=>['count'=>DB::table('site_ratings')->count(),'average'=>round((float)(DB::table('site_ratings')->avg('rating')??0),2)]]);
+    }
+    public function adminMerchants()
+    {
+        $rows=$this->rows(DB::table('merchants as m')->join('users as u','u.id','=','m.user_id')->orderByRaw("CASE m.status WHEN 'pending' THEN 0 ELSE 1 END")->orderByDesc('m.id')->get(['m.*','u.first_name','u.last_name','u.username','u.phone','u.email']));
+        foreach ($rows as &$merchant) $merchant['tin_document_url'] = !empty($merchant['tin_document']) ? app(UploadStorage::class)->url((string)$merchant['tin_document']) : null;
+        unset($merchant);
+        $commissions=$this->rows(DB::table('merchant_commissions as c')->join('merchants as m','m.id','=','c.merchant_id')->join('ekubs as e','e.id','=','c.ekub_id')->where('c.status','pending')->orderBy('c.id')->get(['c.*','m.business_name','e.name as ekub_name']));
+        return $this->page('admin_merchants',['rows'=>$rows,'commissions'=>$commissions]);
+    }
+    public function merchantAdminAction(int $merchantId,string $action,Request $request)
+    {
+        $merchant=$this->row(DB::table('merchants')->where('id',$merchantId)->first());
+        if(!$merchant){$this->flash('Merchant application not found.','error');return $this->go('admin_merchants');}
+        if($action==='reject'&&!trim((string)$request->input('reason'))){$this->flash('Enter a reason for rejection.','error');return $this->go('admin_merchants');}
+        DB::table('merchants')->where('id',$merchantId)->update(['status'=>$action==='approve'?'approved':'rejected','rejection_reason'=>$action==='reject'?trim((string)$request->input('reason')):null,'reviewed_by'=>$this->currentUser()['username'],'reviewed_at'=>now()]);
+        $this->flash($action==='approve'?'Merchant approved.':'Merchant application rejected.','success');return $this->go('admin_merchants');
+    }
+    public function markMerchantCommissionPaid(int $commissionId)
+    {
+        $admin=$this->currentUser();
+        $updated=DB::table('merchant_commissions')->where('id',$commissionId)->where('status','pending')->update(['status'=>'paid','paid_at'=>now(),'paid_by'=>$admin['username']]);
+        $this->flash($updated?'Commission marked paid. Record this only after the merchant has received the transfer.':'Pending commission not found.','message');
+        return $this->go('admin_merchants');
+    }
+    public function merchantPortal()
+    {
+        $user=$this->currentUser();$merchant=$this->row(DB::table('merchants')->where('user_id',$user['id'])->first());
+        $categories=['Hotel','Shop','Mini market','Super Market','Grocery','School','Import and Export','Drivers','Private Works'];
+        if(!$merchant||$merchant['status']!=='approved')return $this->page('merchant_portal',['merchant'=>$merchant,'kyc_status'=>$user['kyc_status']??'not_submitted','business_categories'=>$categories,'categories'=>config('ekub.categories'),'ekub_categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies')]);
+        $ekubs=$this->rows(DB::table('ekubs')->where('merchant_id',$merchant['id'])->orderByDesc('id')->get());
+        foreach($ekubs as &$ekub){
+            $ekub['merchant_banner_url']=!empty($ekub['banner_image'])?app(UploadStorage::class)->url((string)$ekub['banner_image']):null;
+            $ekub['member_rows']=$this->rows(DB::table('ekub_members as em')->join('users as u','u.id','=','em.user_id')->where('em.ekub_id',$ekub['id'])->orderBy('em.id')->get(['u.id','u.first_name','u.last_name','u.username','u.phone','u.email','u.kyc_status','em.share_type','em.contribution_amount']));
+            $ekub['join_requests']=$this->rows(DB::table('merchant_join_requests as r')->join('users as u','u.id','=','r.user_id')->where('r.ekub_id',$ekub['id'])->where('r.status','pending')->orderBy('r.id')->get(['r.id','r.share_type','r.created_at','u.first_name','u.last_name','u.username','u.phone','u.email','u.kyc_status']));
+            $ad=$this->row(DB::table('merchant_ekub_ads')->where('ekub_id',$ekub['id'])->first());
+            if($ad)$ad['images']=json_decode((string)$ad['images'],true)?:[];
+            $ekub['ad']=$ad;
         }
-
-        return $this->page('admin_visits', [
-            'summary' => $summary,
-            'registered_members' => $registeredMembers,
-            'rating_count' => $ratingCount,
-            'rating_average' => $ratingAverage,
-            'available' => $available,
-        ]);
+        unset($ekub);
+        $commissionRows=$this->rows(DB::table('merchant_commissions as c')->join('ekubs as e','e.id','=','c.ekub_id')->where('c.merchant_id',$merchant['id'])->orderByDesc('c.id')->get(['c.*','e.name as ekub_name']));
+        return $this->page('merchant_portal',['merchant'=>$merchant,'kyc_status'=>$user['kyc_status']??'not_submitted','ekubs'=>$ekubs,'commissions'=>$commissionRows,'commission_total'=>array_sum(array_column($commissionRows,'amount')),'commission_pending'=>array_sum(array_map(fn($c)=>$c['status']==='pending'?(float)$c['amount']:0,$commissionRows)),'categories'=>$categories,'business_categories'=>$categories,'ekub_categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies')]);
+    }
+    public function merchantApply(Request $request)
+    {
+        $user=$this->currentUser();
+        if(($user['kyc_status']??null)!=='approved'){$this->flash('Complete identity verification and wait for admin approval before applying for a merchant account.','error');return $this->go('kyc');}
+        $data=$request->validate(['business_name'=>['required','string','max:120'],'tin'=>['required','string','max:40'],'category'=>['required','in:Hotel,Shop,Mini market,Super Market,Grocery,School,Import and Export,Drivers,Private Works'],'business_phone'=>['required','string','max:32'],'address'=>['required','string','max:255'],'website'=>['nullable','url','max:255'],'location'=>['nullable','string','max:255'],'tin_document'=>['nullable','image','mimes:jpg,jpeg,png,webp','max:1024']]);
+        $existing=DB::table('merchants')->where('user_id',$user['id'])->first();
+        if($existing&&$existing->status==='approved'){$this->flash('Your merchant account is already approved.','message');return $this->go('merchant_portal');}
+        if(DB::table('merchants')->where('tin',trim($data['tin']))->where('user_id','!=',$user['id'])->exists()){$this->flash('That TIN is already attached to another merchant.','error');return $this->go('merchant_portal');}
+        $document=null;
+        try {
+            if($request->hasFile('tin_document')) $document=$this->saveUserUpload($request->file('tin_document'),$user,'merchant','tin-document',['jpg','jpeg','png','webp']);
+            $values=['business_name'=>trim($data['business_name']),'tin'=>trim($data['tin']),'category'=>$data['category'],'business_phone'=>trim($data['business_phone']),'address'=>trim($data['address']),'website'=>trim((string)($data['website']??''))?:null,'location'=>trim((string)($data['location']??''))?:null,'status'=>'pending','rejection_reason'=>null,'reviewed_by'=>null,'reviewed_at'=>null,'created_at'=>now()];
+            if($document)$values['tin_document']=$document;
+            DB::table('merchants')->updateOrInsert(['user_id'=>$user['id']],$values);
+        } catch(Throwable $e) { if($document)app(UploadStorage::class)->delete($document);throw $e; }
+        $this->flash('Merchant application sent for admin review.','success');return $this->go('merchant_portal');
+    }
+    public function merchantCreateEkub(Request $request)
+    {
+        $user=$this->currentUser();$merchant=DB::table('merchants')->where('user_id',$user['id'])->where('status','approved')->first();if(!$merchant)return $this->page('error',['code'=>403,'message'=>'An approved merchant account is required.']);
+        $data=$request->validate(['name'=>['required','string','max:80'],'category'=>['nullable','string','max:80'],'frequency'=>['required','in:'.implode(',',config('ekub.frequencies'))],'base_amount'=>['required','numeric','gt:0'],'duration'=>['required','integer','between:2,500'],'banner_image'=>['nullable','image','mimes:jpg,jpeg,png,webp','max:1024']]);
+        if(isset($data['category'])&&$data['category']!==$merchant->category){$this->flash('This Ekub must use your approved merchant category.','error');return $this->go('merchant_portal');}
+        $code=strtoupper(bin2hex(random_bytes(4)));while(DB::table('ekubs')->where('invite_code',$code)->exists())$code=strtoupper(bin2hex(random_bytes(4)));
+        $banner=null;
+        try {
+            if($request->hasFile('banner_image'))$banner=$this->saveUserUpload($request->file('banner_image'),$user,'merchant/banners',trim($data['name']).'_banner',['jpg','jpeg','png','webp']);
+            $ekubId=$this->insertEkub(trim($data['name']),(string)$merchant->category,$data['frequency'],(float)$data['base_amount'],(int)$data['duration'],false,[]);
+            DB::table('ekubs')->where('id',$ekubId)->update(['merchant_id'=>$merchant->id,'invite_code'=>$code,'banner_image'=>$banner]);
+        } catch(Throwable $e) { if($banner)app(UploadStorage::class)->delete($banner);throw $e; }
+        $this->flash('Ekub created. Invite code: '.$code,'success');return $this->go('merchant_portal');
+    }
+    public function merchantRequestAction(int $requestId,string $action)
+    {
+        $user=$this->currentUser();$merchant=DB::table('merchants')->where('user_id',$user['id'])->where('status','approved')->first();
+        $joinRequest=DB::table('merchant_join_requests')->where('id',$requestId)->where('merchant_id',$merchant?->id)->where('status','pending')->first();
+        if(!$joinRequest){$this->flash('Pending join request not found.','error');return $this->go('merchant_portal');}
+        if($action==='reject'){DB::table('merchant_join_requests')->where('id',$requestId)->update(['status'=>'rejected','reviewed_at'=>now()]);$this->flash('Join request rejected.','success');return $this->go('merchant_portal');}
+        try{DB::transaction(function()use($joinRequest,$requestId){$ekub=DB::table('ekubs')->where('id',$joinRequest->ekub_id)->lockForUpdate()->first();$member=DB::table('users')->where('id',$joinRequest->user_id)->first();if(!$ekub||$ekub->status!=='open')throw new \RuntimeException('This Ekub is no longer accepting members.');if(!$member||$member->kyc_status!=='approved')throw new \RuntimeException('This member must have approved identity verification.');if(DB::table('ekub_members')->where('ekub_id',$ekub->id)->where('user_id',$member->id)->exists())throw new \RuntimeException('This user already joined the Ekub.');$fraction=match($joinRequest->share_type){'full'=>1.0,'half'=>0.5,'quarter'=>0.25,default=>0.0};$used=(float)DB::table('ekub_members')->where('ekub_id',$ekub->id)->sum('share_fraction');if($fraction<=0||$used+$fraction>(float)$ekub->duration+0.000001)throw new \RuntimeException('There is not enough capacity for that share.');DB::table('ekub_members')->insert(['ekub_id'=>$ekub->id,'user_id'=>$member->id,'share_type'=>$joinRequest->share_type,'share_fraction'=>$fraction,'contribution_amount'=>round((float)$ekub->base_amount*$fraction,2),'status'=>'joined','joined_at'=>now()]);DB::table('merchant_join_requests')->where('id',$requestId)->update(['status'=>'approved','reviewed_at'=>now()]);});$this->flash('Member approved and added to the Ekub.','success');}catch(Throwable $e){$this->flash($e->getMessage(),'error');}
+        return $this->go('merchant_portal');
+    }
+    public function merchantSaveAd(int $ekubId,Request $request)
+    {
+        $user=$this->currentUser();$merchant=DB::table('merchants')->where('user_id',$user['id'])->where('status','approved')->first();$ekub=DB::table('ekubs')->where('id',$ekubId)->where('merchant_id',$merchant?->id)->first();if(!$ekub){$this->flash('Merchant Ekub not found.','error');return $this->go('merchant_portal');}
+        $data=$request->validate(['title'=>['required','string','max:120'],'body'=>['nullable','string','max:2000'],'website_url'=>['nullable','url','max:255'],'location'=>['nullable','string','max:255'],'images'=>['nullable','array','max:3'],'images.*'=>['nullable','image','mimes:jpg,jpeg,png,webp','max:1024']]);
+        $old=DB::table('merchant_ekub_ads')->where('ekub_id',$ekubId)->first();$images=$old?(json_decode((string)$old->images,true)?:[]):[];$newImages=[];
+        try{foreach((array)$request->file('images',[]) as $file){$path=$this->imageUpload($file,'merchant_ads');if($path)$newImages[]=$path;}if($newImages)$images=$newImages;DB::table('merchant_ekub_ads')->updateOrInsert(['ekub_id'=>$ekubId],['title'=>trim($data['title']),'body'=>trim((string)($data['body']??''))?:null,'website_url'=>trim((string)($data['website_url']??''))?:null,'location'=>trim((string)($data['location']??''))?:null,'images'=>json_encode(array_slice($images,0,3),JSON_THROW_ON_ERROR),'updated_at'=>now()]);}catch(Throwable $e){foreach($newImages as $path)app(UploadStorage::class)->delete($path);$this->flash($e->getMessage(),'error');return $this->go('merchant_portal');}
+        if($newImages&&$old)foreach(json_decode((string)$old->images,true)?:[] as $path)app(UploadStorage::class)->delete($path);
+        $this->flash('Merchant Ekub ad saved.','success');return $this->go('merchant_portal');
     }
     public function adminFullEkubs()
     {
@@ -1269,7 +939,7 @@ class WebsiteController
         if($request->isMethod('post')){
             $name=trim((string)$request->input('name'));$category=(string)$request->input('category');$frequency=(string)$request->input('frequency');$amount=(float)$request->input('base_amount');$duration=(int)$request->input('duration');$isItem=$category==="Item's Ekub";
             if(!$name||!in_array($category,config('ekub.categories'),true)||!in_array($frequency,config('ekub.frequencies'),true)||$amount<=0||$duration<1){$this->flash('Enter a name, category, frequency, amount, and valid duration.','error');return $this->go('create_ekub');}
-            try{$owner=$this->currentUser();$images=[];foreach((array)$request->file('images',[]) as $file){if(!$isItem)break;$img=$this->imageUpload($file,'ekub_items',$name,$owner);if($img)$images[]=$img;}$createdId=DB::transaction(fn()=> $this->insertEkub($name,$category,$frequency,$amount,$duration,$isItem,$images));$this->notifyEkubCreated((int)$createdId);$this->flash('Ekub created successfully. Members were notified.','success');return $this->go('admin_dashboard');}
+            try{$images=[];foreach((array)$request->file('images',[]) as $file){if(!$isItem)break;$img=$this->imageUpload($file,'ekub_items',$name);if($img)$images[]=$img;}$createdId=DB::transaction(fn()=> $this->insertEkub($name,$category,$frequency,$amount,$duration,$isItem,$images));$this->notifyEkubCreated((int)$createdId);$this->flash('Ekub created successfully. Members were notified.','success');return $this->go('admin_dashboard');}
             catch(Throwable $e){$this->flash($e->getMessage(),'error');}
         }
         return $this->page('create_ekub');
@@ -1310,13 +980,13 @@ class WebsiteController
         if(!$isItem&&$files){$this->flash("Images can only be added to an Item's Ekub.",'error');return $this->go('admin_edit_ekub',['ekub_id'=>$ekubId]);}
         foreach($files as $file){
             $extension=strtolower($file->getClientOriginalExtension());
-            if(!in_array($extension,['png','jpg','jpeg','webp','gif'],true)||$file->getSize()>1024*1024){$this->flash('Ekub images must be PNG, JPG, WEBP, or GIF files up to 1 MB each.','error');return $this->go('admin_edit_ekub',['ekub_id'=>$ekubId]);}
+            if(!in_array($extension,['png','jpg','jpeg','webp','gif'],true)||$file->getSize()>50*1024*1024){$this->flash('Ekub images must be PNG, JPG, WEBP, or GIF files up to 50 MB each.','error');return $this->go('admin_edit_ekub',['ekub_id'=>$ekubId]);}
         }
         $remove=array_values(array_intersect($existingImages,array_map('strval',(array)$request->input('remove_images',[]))));
         if(!$isItem)$remove=$existingImages;
         $kept=array_values(array_diff($existingImages,$remove));$newImages=[];
         try{
-            if($isItem)foreach($files as $file){$saved=$this->imageUpload($file,'ekub_items',$name,$this->currentUser());if($saved)$newImages[]=$saved;}
+            if($isItem)foreach($files as $file){$saved=$this->imageUpload($file,'ekub_items',$name);if($saved)$newImages[]=$saved;}
             $finalImages=array_merge($kept,$newImages);
             DB::transaction(function()use($ekubId,$name,$category,$frequency,$amount,$duration,$isItem,$finalImages){
                 $locked=$this->row(DB::table('ekubs')->where('id',$ekubId)->lockForUpdate()->first());
@@ -1528,8 +1198,8 @@ class WebsiteController
     public function partners(Request $request)
     {
         if($request->isMethod('post')){
-            $first=trim((string)$request->input('first_name'));$last=trim((string)$request->input('last_name'));$username=trim((string)$request->input('username'));$phone=$this->normalizedPhone((string)$request->input('phone'));$email=trim((string)$request->input('email'));$password=(string)$request->input('password');$perms=array_intersect((array)$request->input('permissions',[]),['payment_approval','kyc_approval','member_info','recent_winner']);
-            if(!$first||!$last||!$phone||!$username||!filter_var($email,FILTER_VALIDATE_EMAIL)||!$this->validPassword($password))$this->flash('Complete all required fields, enter a valid email address, and use a strong password.','error');
+            $first=trim((string)$request->input('first_name'));$last=trim((string)$request->input('last_name'));$username=trim((string)$request->input('username'));$phone=$this->normalizedPhone((string)$request->input('phone'));$email=trim((string)$request->input('email'))?:null;$password=(string)$request->input('password');$perms=array_intersect((array)$request->input('permissions',[]),['payment_approval','kyc_approval','member_info','recent_winner']);
+            if(!$first||!$last||!$phone||!$username||!$this->validPassword($password))$this->flash('Complete the required fields and use a strong password.','error');
             elseif(DB::table('users')->where('username',$username)->orWhere('phone',$phone)->when($email,fn($q)=>$q->orWhere('email',$email))->exists())$this->flash('Username, phone, or email already exists.','error');
             else{DB::transaction(function()use($first,$last,$username,$phone,$email,$password,$perms){$id=DB::table('users')->insertGetId(['first_name'=>$first,'last_name'=>$last,'username'=>$username,'phone'=>$phone,'email'=>$email,'password_hash'=>Hash::make($password),'role'=>'partner','status'=>'active','kyc_status'=>'approved','created_at'=>now()]);DB::table('partners')->insert(['user_id'=>$id,'permissions'=>implode(',',$perms),'created_at'=>now()]);});$this->flash('Partner account created.','success');return $this->go('partners');}
         }
@@ -1581,7 +1251,7 @@ class WebsiteController
         $count=DB::table('payouts')->where('ekub_id',$ekubId)->count();if($count<(int)$ekub['duration'])return null;
         DB::table('ekubs')->where('id',$ekubId)->update(['status'=>'finished','finished_at'=>now()]);
         $images=$ekub['is_item']?$this->ekubs->images($ekub):[];
-        return $this->insertEkub($ekub['name'],$ekub['category'],$ekub['frequency'],(float)$ekub['base_amount'],(int)$ekub['duration'],(bool)$ekub['is_item'],$images,$ekubId,$ekub['merchant_id'] ? (int)$ekub['merchant_id'] : null,$ekub['merchant_id'] ? $this->merchantInviteCode() : null);
+        return $this->insertEkub($ekub['name'],$ekub['category'],$ekub['frequency'],(float)$ekub['base_amount'],(int)$ekub['duration'],(bool)$ekub['is_item'],$images,$ekubId);
     }
     private function performDraw(int $ekubId,int $periodNo): array
     {
@@ -1590,18 +1260,13 @@ class WebsiteController
             if(!$ekub)return ['error'=>'Ekub not found.'];
             if($state['error'])return ['error'=>$state['error']];
             $winnerIndex=random_int(0,count($state['members'])-1);$winner=$state['members'][$winnerIndex];
-            $gross=(float)DB::table('payments')->where('ekub_id',$ekubId)->where('period_no',$periodNo)->where('status','approved')->sum('approved_amount');
-            $merchantId = !empty($ekub['merchant_id']) ? (int)$ekub['merchant_id'] : null;
-            $fee=round($gross*0.02,2);
-            $merchantCommission = $merchantId ? floor($gross*0.005*100 + 0.000001)/100 : 0.0;
-            $adminFee = round($fee-$merchantCommission,2);
-            $net=round($gross-$fee,2);
-            $payoutId=DB::table('payouts')->insertGetId(['ekub_id'=>$ekubId,'period_no'=>$periodNo,'winner_member_id'=>$winner['id'],'gross_amount'=>$gross,'service_fee'=>$fee,'admin_fee'=>$adminFee,'merchant_commission'=>$merchantCommission,'net_amount'=>$net,'status'=>'pending','created_at'=>now(),'celebrated'=>false]);
-            if ($merchantId) DB::table('merchant_commissions')->insert(['merchant_id'=>$merchantId,'ekub_id'=>$ekubId,'payout_id'=>$payoutId,'period_no'=>$periodNo,'gross_amount'=>$gross,'commission_amount'=>$merchantCommission,'status'=>'pending','created_at'=>now()]);
+            $gross=(float)DB::table('payments')->where('ekub_id',$ekubId)->where('period_no',$periodNo)->where('status','approved')->sum('approved_amount');$fee=round($gross*0.02,2);$net=round($gross*0.98,2);
+            $payoutId=DB::table('payouts')->insertGetId(['ekub_id'=>$ekubId,'period_no'=>$periodNo,'winner_member_id'=>$winner['id'],'gross_amount'=>$gross,'service_fee'=>$fee,'net_amount'=>$net,'status'=>'pending','created_at'=>now(),'celebrated'=>false]);
+            if(!empty($ekub['merchant_id']))DB::table('merchant_commissions')->insert(['merchant_id'=>$ekub['merchant_id'],'ekub_id'=>$ekubId,'payout_id'=>$payoutId,'gross_amount'=>$gross,'amount'=>round($gross*0.005,2),'admin_amount'=>round($gross*0.015,2),'status'=>'pending','created_at'=>now()]);
             $next=min((int)$ekub['duration'],$periodNo+1);DB::table('ekubs')->where('id',$ekubId)->update(['current_period'=>$next]);
             if($next>$periodNo){DB::table('ekubs')->where('id',$ekubId)->update(['period_started_at'=>now()]);DB::table('period_dues')->updateOrInsert(['ekub_id'=>$ekubId,'period_no'=>$next],['started_at'=>now()]);}
             $newId=$periodNo >= (int)$ekub['duration'] ? $this->finishIfComplete($ekubId) : null;
-            return ['result'=>['index'=>$winnerIndex,'finished'=>(bool)$newId,'recreated_id'=>$newId,'winner'=>trim($winner['first_name'].' '.$winner['last_name']),'period'=>$periodNo,'gross'=>$gross,'fee'=>$fee,'admin_fee'=>$adminFee,'merchant_commission'=>$merchantCommission,'net'=>$net,'next_period'=>$next>$periodNo?$next:null]];
+            return ['result'=>['index'=>$winnerIndex,'finished'=>(bool)$newId,'recreated_id'=>$newId,'winner'=>trim($winner['first_name'].' '.$winner['last_name']),'period'=>$periodNo,'gross'=>$gross,'fee'=>$fee,'net'=>$net,'next_period'=>$next>$periodNo?$next:null]];
         });
         if (! isset($draw['error'])) {
             $this->notifyWinner($ekubId, $periodNo);
@@ -1645,7 +1310,7 @@ class WebsiteController
     public function adminAdSave(int $slot,Request $request)
     {
         if($slot<1||$slot>10)return $this->go('admin_ads');
-        try{$file=$request->file('image');$image=$this->imageUpload($file,'ads','ad-'.$slot,$this->currentUser());if(!$image)throw new \RuntimeException('Choose an image first.');$old=DB::table('ads')->where('slot',$slot)->value('image');DB::table('ads')->updateOrInsert(['slot'=>$slot],['image'=>$image,'updated_at'=>now()]);if($old)app(UploadStorage::class)->delete((string) $old);$this->flash("Ad {$slot} published.",'success');}
+        try{$file=$request->file('image');$image=$this->imageUpload($file,'ads','ad-'.$slot);if(!$image)throw new \RuntimeException('Choose an image first.');$old=DB::table('ads')->where('slot',$slot)->value('image');DB::table('ads')->updateOrInsert(['slot'=>$slot],['image'=>$image,'updated_at'=>now()]);if($old)app(UploadStorage::class)->delete((string) $old);$this->flash("Ad {$slot} published.",'success');}
         catch(Throwable $e){$this->flash($e->getMessage(),'error');}
         return $this->go('admin_ads');
     }
@@ -1732,15 +1397,9 @@ class WebsiteController
         if (! $userId) return false;
         if ($role === 'admin') return true;
 
-        $segments = explode('/', str_replace('\\', '/', $path));
-        $first = strtolower($segments[0] ?? '');
-        $userUpload = $first === 'users' && count($segments) >= 4;
-        $userUploadKind = $userUpload ? strtolower($segments[2]) : '';
-        $ownerId = 0;
-        if ($userUpload && preg_match('/-u(\d+)$/', $segments[1], $match)) $ownerId = (int) $match[1];
-        $ownedUpload = $ownerId > 0 && $ownerId === $userId;
-        $kycFile = in_array($first, ['kyc', 'id_passport', 'personal_photo', 'video'], true) || ($userUpload && $userUploadKind === 'kyc');
-        $paymentFile = $first === 'payments' || ($userUpload && $userUploadKind === 'payments') || (! str_contains($path, '/') && str_starts_with(strtolower($path), 'payment-'));
+        $first = strtolower(explode('/', $path, 2)[0] ?? '');
+        $kycFile = in_array($first, ['kyc', 'id_passport', 'personal_photo', 'video'], true);
+        $paymentFile = $first === 'payments' || (! str_contains($path, '/') && str_starts_with(strtolower($path), 'payment-'));
         if ($role === 'partner' && $this->currentUser()) {
             if ($kycFile) return $this->partnerAllowed('kyc_approval') || $this->partnerAllowed('member_info');
             if ($paymentFile) return $this->partnerAllowed('payment_approval');
@@ -1748,10 +1407,10 @@ class WebsiteController
         }
 
         if ($role !== 'member') return false;
-        if ($kycFile && ($ownedUpload || DB::table('kyc_verifications')->where('user_id', $userId)->where(function ($query) use ($path) {
+        if ($kycFile && DB::table('kyc_verifications')->where('user_id', $userId)->where(function ($query) use ($path) {
             $query->where('id_front', $path)->orWhere('id_back', $path)->orWhere('personal_photo', $path)
                 ->orWhere('video_agreement', $path)->orWhere('liveness_video', $path);
-        })->exists())) return true;
+        })->exists()) return true;
 
         return DB::table('payments')->where('user_id', $userId)->where(function ($query) use ($path) {
             $query->where('screenshot', $path)->orWhere('screenshot', basename($path));

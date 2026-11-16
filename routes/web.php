@@ -13,7 +13,6 @@ Route::get('/ekub/{ekubId}', [Site::class,'ekubDetail'])->whereNumber('ekubId')-
 Route::match(['get','post'], '/register', [Site::class,'register'])->name('register');
 Route::match(['get','post'], '/login', [Site::class,'login'])->name('login');
 Route::match(['get','post'], '/verify-login', [Site::class,'verifyLogin'])->name('verify_login');
-Route::post('/website-rating', [Site::class,'submitWebsiteRating'])->middleware('throttle:5,1')->name('website_rating');
 Route::get('/admin', [Site::class,'adminLogin'])->name('admin_root');
 Route::match(['get','post'], '/admin/login', [Site::class,'adminLogin'])->name('admin_login');
 Route::match(['get','post'], '/partner/login', [Site::class,'partnerLogin'])->name('partner_login');
@@ -24,10 +23,11 @@ Route::middleware('auth.session')->group(function () {
     Route::get('/api/dashboard/stats', [Site::class,'dashboardStats'])->name('dashboard_stats_api');
     Route::get('/dashboard', [Site::class,'dashboard'])->name('dashboard');
     Route::get('/profile', [Site::class,'profile'])->name('profile');
+    Route::post('/profile/rate', [Site::class,'rateWebsite'])->name('rate_website');
     Route::get('/merchant', [Site::class,'merchantPortal'])->name('merchant_portal');
-    Route::post('/merchant/apply', [Site::class,'merchantApply'])->name('merchant_apply');
+    Route::post('/merchant/application', [Site::class,'merchantApply'])->name('merchant_apply');
     Route::post('/merchant/ekubs', [Site::class,'merchantCreateEkub'])->name('merchant_create_ekub');
-    Route::post('/merchant/join-requests/{requestId}/{action}', [Site::class,'merchantJoinDecision'])->whereNumber('requestId')->whereIn('action',['approve','reject'])->name('merchant_join_decision');
+    Route::post('/merchant/requests/{requestId}/{action}', [Site::class,'merchantRequestAction'])->whereNumber('requestId')->whereIn('action',['approve','reject'])->name('merchant_request_action');
     Route::post('/merchant/ekubs/{ekubId}/ad', [Site::class,'merchantSaveAd'])->whereNumber('ekubId')->name('merchant_save_ad');
     Route::post('/profile/edit/{field}', [Site::class,'profileEdit'])->name('profile_edit');
     Route::post('/profile/picture', [Site::class,'profilePicture'])->name('profile_picture_update');
@@ -56,10 +56,11 @@ Route::middleware('auth.session')->group(function () {
 Route::middleware('role:admin')->group(function () {
     Route::get('/admin/dashboard', [Site::class,'adminDashboard'])->name('admin_dashboard');
     Route::get('/admin/tools', [Site::class,'adminTools'])->name('admin_tools');
-    Route::get('/admin/visits', [Site::class,'adminVisits'])->name('admin_visits');
+    Route::get('/admin/visits', [Site::class,'adminAnalytics'])->name('admin_visits');
+    Route::get('/admin/analytics', [Site::class,'adminAnalytics'])->name('admin_analytics');
     Route::get('/admin/merchants', [Site::class,'adminMerchants'])->name('admin_merchants');
-    Route::post('/admin/merchants/{merchantId}/{action}', [Site::class,'adminMerchantDecision'])->whereNumber('merchantId')->whereIn('action',['approve','reject'])->name('admin_merchant_decision');
-    Route::post('/admin/merchant-commissions/{commissionId}/paid', [Site::class,'adminPayMerchantCommission'])->whereNumber('commissionId')->name('admin_merchant_commission_paid');
+    Route::post('/admin/merchants/{merchantId}/{action}', [Site::class,'merchantAdminAction'])->whereNumber('merchantId')->whereIn('action',['approve','reject'])->name('merchant_admin_action');
+    Route::post('/admin/merchant-commissions/{commissionId}/paid', [Site::class,'markMerchantCommissionPaid'])->whereNumber('commissionId')->name('merchant_commission_paid');
     Route::get('/admin/full-ekubs', [Site::class,'adminFullEkubs'])->name('admin_full_ekubs');
     Route::get('/admin/pick-winners', [Site::class,'adminPickWinners'])->name('admin_pick_winners');
     Route::match(['get','post'], '/admin/ekubs/create', [Site::class,'createEkub'])->name('create_ekub');

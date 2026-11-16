@@ -1,0 +1,16 @@
+{% extends 'base.twig' %}
+{% block content %}
+<div class="container analytics-page">
+  <header class="analytics-head"><div><span class="eyebrow">ADMIN PORTAL</span><h1>App &amp; Website Visits</h1><p>Compare unique visitors, signed-in members, and other visitors for each period.</p></div><a class="btn ghost" href="{{url_for('admin_dashboard')}}">Back to dashboard</a></header>
+  <section class="analytics-summary"><article class="card"><span>Registered members</span><strong>{{members}}</strong></article><article class="card"><span>Website rating</span><strong>{{ratings.average}} / 5</strong><small>{{ratings.count}} ratings</small></article></section>
+  <section class="analytics-grid">
+    {% for row in analytics %}
+    <article class="card analytics-card"><h2>{{row.label}}</h2><div class="analytics-row"><span><i class="app-dot"></i> App visitors</span><b>{{row.app_visitors}}</b></div><div class="analytics-row sub-row"><span>Signed-in members</span><b>{{row.app_members}}</b></div><div class="analytics-row sub-row"><span>Other visitors</span><b>{{row.app_other}}</b></div><div class="analytics-row"><span><i class="web-dot"></i> Website visitors</span><b>{{row.website_visitors}}</b></div><div class="analytics-row sub-row"><span>Signed-in members</span><b>{{row.website_members}}</b></div><div class="analytics-row sub-row"><span>Other visitors</span><b>{{row.website_other}}</b></div><div class="analytics-row"><span><i class="member-dot"></i> New members</span><b>{{row.new_members}}</b></div></article>
+    {% endfor %}
+  </section>
+  <p class="analytics-note">Visitors are counted once per device or browser per day. Individual visitor identifiers are stored only as one-way hashes.</p>
+</div>
+<style>
+.analytics-page{max-width:1180px}.analytics-head{display:flex;justify-content:space-between;align-items:end;gap:16px;margin:24px 0}.analytics-head h1{margin:.2rem 0}.analytics-head p{opacity:.7}.eyebrow{font-size:.75rem;letter-spacing:.15em;font-weight:900;color:#21a565}.analytics-summary,.analytics-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}.analytics-summary{grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:16px}.analytics-summary .card,.analytics-card{padding:20px;border-radius:18px}.analytics-summary span,.analytics-summary small{display:block;opacity:.68}.analytics-summary strong{display:block;font-size:2rem;margin-top:8px}.analytics-card h2{margin:0 0 18px;font-size:1.15rem}.analytics-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid rgba(128,128,128,.17)}.analytics-row span{display:flex;align-items:center;gap:9px}.analytics-row b{font-size:1.1rem}.analytics-row i{width:10px;height:10px;border-radius:50%;display:inline-block}.analytics-row.sub-row{padding-left:18px;font-size:.9rem;opacity:.78}.analytics-row.sub-row b{font-size:1rem}.app-dot{background:#37bce0}.web-dot{background:#88b44a}.member-dot{background:#b28cff}.analytics-note{opacity:.62;font-size:.85rem;margin-top:18px}@media(max-width:760px){.analytics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.analytics-head{align-items:start;flex-direction:column}}@media(max-width:460px){.analytics-grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}

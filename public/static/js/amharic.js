@@ -584,7 +584,12 @@
 
   setDocumentLanguage();
   document.addEventListener('change', function (event) {
-    if (event.target && event.target.id === 'siteLanguage') setDocumentLanguage();
+    if (event.target && event.target.id === 'siteLanguage') {
+      var allowed = ['AM', 'ORO', 'EN'];
+      var code = allowed.indexOf(event.target.value) !== -1 ? event.target.value : 'EN';
+      try { localStorage.setItem('mekenet_language', code); } catch (_) {}
+      setDocumentLanguage();
+    }
   });
   window.addEventListener('storage', function (event) {
     if (event.key === 'mekenet_language') setDocumentLanguage();

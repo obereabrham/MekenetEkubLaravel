@@ -1,96 +1,43 @@
 {% extends 'base.twig' %}
 {% block content %}
-<div class="profile-page-shell">
-  <section class="card form-card profile-page">
-    <header class="profile-hero">
-      <div class="profile-hero-avatar">
-        {% if user.profile_picture %}<img src="{{url_for('uploads', name: user.profile_picture)}}" alt="Profile picture">
-        {% else %}<span aria-hidden="true">ME</span>{% endif %}
-      </div>
-      <div class="profile-hero-copy">
-        <span class="profile-eyebrow">ACCOUNT CENTER</span>
-        <h1>My Profile</h1>
-        <p>Manage your personal details, identity verification, and account preferences.</p>
-      </div>
-      <div class="profile-hero-status">
-        <span>KYC status</span>
-        <strong class="pill">{{user.kyc_status|default('not submitted')}}</strong>
-      </div>
-    </header>
-
-    {% if user.kyc_status == 'approved' %}
-      <div class="profile-notice" role="status">
-        <span class="profile-notice-icon" aria-hidden="true">✓</span>
-        <p>Your personal information is locked after KYC approval. You can still update your profile picture.</p>
-      </div>
-    {% endif %}
-
-    <section class="profile-panel" aria-labelledby="profile-details-heading">
-      <div class="profile-panel-heading">
-        <span class="profile-panel-icon" aria-hidden="true">♙</span>
-        <div><h2 id="profile-details-heading">Personal details</h2><p>Your account information and contact details.</p></div>
-      </div>
-      <div class="profile-fields">
-      {% for field,label in {'first_name':'First name','last_name':'Last name','username':'Username','phone':'Phone number','email':'Email address'} %}
-        <section class="profile-field">
-          <div class="profile-field-value"><span class="profile-label">{{label}}</span><strong>{{user[field]|default('Not set')}}</strong></div>
-          {% if user.kyc_status == 'approved' %}<span class="profile-lock" title="Locked after KYC approval"><span aria-hidden="true">🔒</span> Locked</span>
-          {% elseif edit_field == field %}
-            <form class="profile-edit-form" method="post" action="{{url_for('profile_edit', field: field)}}">{{ csrf_field() }}
-              <input name="value" value="{{user[field]|default('')}}" required {% if field=='email' %}type="email"{% elseif field=='phone' %}type="tel"{% else %}type="text"{% endif %}>
-              <button class="btn" type="submit">Continue</button><a class="btn ghost profile-edit-button" href="{{url_for('profile')}}">Cancel</a>
-            </form>
-          {% else %}<a class="btn ghost profile-edit-button" href="{{url_for('profile', edit: field)}}">Edit</a>{% endif %}
-        </section>
-      {% endfor %}
-      </div>
-    </section>
-
-    <section class="profile-panel profile-picture-panel" aria-labelledby="profile-picture-heading">
-      <div class="profile-panel-heading">
-        <span class="profile-panel-icon" aria-hidden="true">▧</span>
-        <div><h2 id="profile-picture-heading">Profile picture</h2><p>Choose a clear image so people can recognize you.</p></div>
-      </div>
-      <div class="profile-field profile-picture-field">
-        <div class="profile-field-value"><span class="profile-label">Current picture</span>
-          {% if user.profile_picture %}<img class="profile-edit-avatar" src="{{url_for('uploads', name: user.profile_picture)}}" alt="Your profile picture">{% else %}<strong>Not set</strong>{% endif %}
-        </div>
-        <form method="post" action="{{url_for('profile_picture_update')}}" enctype="multipart/form-data">{{ csrf_field() }}
-          <label class="visually-hidden" for="profilePictureUpload">Choose a profile picture (max 1 MB)</label>
-          <input id="profilePictureUpload" type="file" name="profile_picture" accept="image/jpeg,image/png,image/webp,image/gif" required>
-          <button class="btn" type="submit">Update profile picture</button>
+<div class="card form-card profile-page">
+  <h1>My Profile</h1>
+  <p>KYC: <span class="pill">{{user.kyc_status}}</span></p>
+  {% if user.kyc_status == 'approved' %}<p style="color:var(--muted)">Your information is locked after KYC approval. You can only change your profile picture.</p>{% endif %}
+  <div class="profile-fields">
+  {% for field,label in {'first_name':'First name','last_name':'Last name','username':'Username','phone':'Phone number','email':'Email address'} %}
+    <section class="profile-field">
+      <div class="profile-field-value"><span class="profile-label">{{label}}</span><strong>{{user[field]|default('Not set')}}</strong></div>
+      {% if user.kyc_status == 'approved' %}<span class="pill" title="Locked after KYC approval">🔒 Locked</span>
+      {% elseif edit_field == field %}
+        <form class="profile-edit-form" method="post" action="{{url_for('profile_edit', field: field)}}">{{ csrf_field() }}
+          <input name="value" value="{{user[field]|default('')}}" required {% if field=='email' %}type="email"{% elseif field=='phone' %}type="tel"{% else %}type="text"{% endif %}>
+          <button class="btn" type="submit">Continue</button><a class="btn ghost" href="{{url_for('profile')}}">Cancel</a>
         </form>
-        <small class="profile-upload-hint">Choose an image · maximum size 1 MB</small>
-      </div>
+      {% else %}<a class="btn ghost profile-edit-button" href="{{url_for('profile', edit: field)}}">Edit</a>{% endif %}
     </section>
-
-    <nav class="profile-actions" aria-label="Profile and account security">
-      <a class="profile-action-link" href="{{url_for('kyc')}}"><span class="profile-action-icon" aria-hidden="true">✓</span><span><strong>KYC Verification</strong><small>Identity review and status</small></span><b aria-hidden="true">›</b></a>
-      <a class="profile-action-link" href="{{url_for('security_2fa')}}"><span class="profile-action-icon profile-action-icon-blue" aria-hidden="true">⌑</span><span><strong>Two-factor security</strong><small>Protect your account</small></span><b aria-hidden="true">›</b></a>
-      {% if user.role == 'member' %}
-      <a class="profile-action-link" href="{{url_for('merchant_portal')}}"><span class="profile-action-icon profile-action-icon-gold" aria-hidden="true">▣</span><span><strong>{% if merchant and merchant.status == 'approved' %}Merchant dashboard{% elseif merchant and merchant.status == 'pending' %}Merchant application status{% else %}Become a merchant{% endif %}</strong><small>Business tools and verification</small></span><b aria-hidden="true">›</b></a>
-      {% endif %}
-    </nav>
-    {% if merchant and merchant.status == 'pending' %}<p class="merchant-profile-state">Your TIN and business information are waiting for admin review.</p>{% elseif merchant and merchant.status == 'rejected' %}<p class="merchant-profile-state">Your merchant application needs changes. Open the merchant page to review the admin note.</p>{% endif %}
-
-    <section id="website-rating" class="card website-rating-card" aria-labelledby="website-rating-heading">
-      <div class="rating-card-heading">
-        <span class="rating-card-icon" aria-hidden="true">★</span>
-        <div><span class="profile-eyebrow">YOUR FEEDBACK</span><h2 id="website-rating-heading">Rate and review the website</h2><p>Tell us how your experience with Mekenet Ekub has been.</p></div>
-      </div>
-      <form method="post" action="{{url_for('website_rating')}}">{{ csrf_field() }}
-        <label for="profile-rating-name">Your name</label>
-        <input id="profile-rating-name" name="display_name" maxlength="80" value="{{user.first_name|default('')}} {{user.last_name|default('')}}" required>
-        <label for="website-rating-score">Your rating</label>
-        <select id="website-rating-score" name="rating" required>
-          <option value="5">★★★★★ · Excellent</option><option value="4">★★★★ · Good</option><option value="3">★★★ · Okay</option><option value="2">★★ · Poor</option><option value="1">★ · Needs work</option>
-        </select>
-        <label for="website-rating-comment">Comment</label>
-        <textarea id="website-rating-comment" name="comment" maxlength="1000" rows="4" minlength="5" required placeholder="Share your experience"></textarea>
-        <button class="btn" type="submit"><span aria-hidden="true">✦</span> Send review</button>
-      </form>
-      <a class="profile-reviews-link" href="{{url_for('home')}}#community-ratings">Read community reviews <span aria-hidden="true">→</span></a>
-    </section>
+  {% endfor %}
+  <section class="profile-field profile-picture-field">
+    <div class="profile-field-value"><span class="profile-label">Profile picture</span>{% if user.profile_picture %}<img class="profile-edit-avatar" src="{{url_for('static', filename: 'uploads/' ~ user.profile_picture)}}" alt="Profile picture">{% else %}<strong>Not set</strong>{% endif %}</div>
+    <form method="post" action="{{url_for('profile_picture_update')}}" enctype="multipart/form-data">{{ csrf_field() }}<input type="file" name="profile_picture" accept="image/*" required><button class="btn" type="submit">Update picture</button></form>
+  </section>
+  </div>
+  <br><a class="btn ghost" href="{{url_for('kyc')}}">KYC Verification</a> <a class="btn ghost" href="{{url_for('security_2fa')}}">Two-factor security</a>
+  <p><a class="btn" href="{{url_for('merchant_portal')}}">{% if user.role == 'merchant' %}Merchant dashboard{% else %}Merchant account{% endif %}</a></p>
+  <section id="website-rating" class="card website-rating-card">
+    <h2>Rate and review the website</h2>
+    <p>Tell us how your experience with Mekenet Ekub has been.</p>
+    <form method="post" action="{{url_for('rate_website')}}">{{csrf_field()}}
+      <label for="website-rating-score">Your rating</label>
+      <select id="website-rating-score" name="rating" required>
+        {% for value in [5,4,3,2,1] %}<option value="{{value}}" {% if site_rating == value %}selected{% endif %}>{{value}} star{% if value != 1 %}s{% endif %}</option>{% endfor %}
+      </select>
+      <label for="website-rating-comment">Comment (optional)</label>
+      <textarea id="website-rating-comment" name="comment" maxlength="1000" rows="3" placeholder="What worked well? What could be better?">{{site_comment|default('')}}</textarea>
+      <button class="btn" type="submit">Submit rating</button>
+      {% if site_rating %}<small>Thank you. Your latest rating is {{site_rating}}/5.</small>{% endif %}
+    </form>
   </section>
 </div>
+<style>.website-rating-card{margin-top:24px;padding:22px}.website-rating-card h2{margin:0 0 5px}.website-rating-card p{opacity:.7}.website-rating-card form{display:grid;gap:9px;max-width:540px}.website-rating-card textarea{font:inherit;padding:12px;border:1px solid var(--border,#d5ded8);border-radius:12px;background:var(--surface,#fff);color:inherit}.website-rating-card select{max-width:220px}</style>
 {% endblock %}

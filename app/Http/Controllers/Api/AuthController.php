@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Support\UploadStorage;
 use App\Models\User;
 use App\Support\BrandedEmail;
-use App\Support\VisitTracker;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -196,19 +195,10 @@ class AuthController
         RateLimiter::hit($limitKey, 60);
 
         $phone = $this->normalizedPhone($login);
-        $phoneCandidates = $phone === null ? [] : $this->phoneCandidates($login);
-        $phoneDigits = $phone === null ? [] : $this->phoneDigitCandidates($phone);
-        $user = DB::table('users')->where(function ($query) use ($login, $phone, $phoneCandidates, $phoneDigits): void {
-            $query->where('username', $login)->orWhere('email', mb_strtolower($login));
-            if ($phone !== null) {
-                $query->orWhereIn('phone', $phoneCandidates);
-                $query->orWhereRaw(
-                    "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), '.', ''), '/', '') IN (".implode(',', array_fill(0, count($phoneDigits), '?')).')',
-                    $phoneDigits,
-                );
-            } else {
-                $query->orWhere('phone', $login);
-            }
+        $user = DB::table('users')->where(function ($query) use ($login, $phone): void {
+            $query->whereRaw('LOWER(username) = ?', [mb_strtolower($login)])
+                ->orWhereRaw('LOWER(email) = ?', [mb_strtolower($login)]);
+            if ($phone !== null) $query->orWhere('phone', $phone);
         })->first();
 
         if (! $user || ! Hash::check($data['password'], (string) $user->password_hash)) {
@@ -221,14 +211,18 @@ class AuthController
             return response()->json(['message' => 'This account is suspended. Contact the site administrator.'], 403);
         }
 
-        if ($user->role !== 'member') {
+        if (! in_array($user->role, ['member', 'admin'], true)) {
             return response()->json(['message' => 'Use the website admin or partner portal for this account.'], 403);
+        }
+
+        if ($user->role === 'admin' && ! (bool) $user->twofa_enabled) {
+            return response()->json(['message' => 'Enable two-step verification on the admin account before using admin tools in the mobile app.'], 403);
         }
 
         if (! (bool) $user->twofa_enabled) {
             RateLimiter::clear($limitKey);
 
-            return $this->issueToken((int) $user->id, $data['device_name'] ?? null, $request);
+            return $this->issueToken((int) $user->id, $data['device_name'] ?? null, (string) $user->role);
         }
 
         $methods = [];
@@ -253,6 +247,7 @@ class AuthController
         $challengeId = bin2hex(random_bytes(32));
         $challenge = [
             'user_id' => (int) $user->id,
+            'role' => (string) $user->role,
             'methods' => $methods,
             'device_name' => $this->deviceName($data['device_name'] ?? null),
             'attempts' => 0,
@@ -318,10 +313,14 @@ class AuthController
         }
 
         $user = DB::table('users')->where('id', $challenge['user_id'])->first();
-        if (! $user || $user->status !== 'active' || $user->role !== 'member') {
+        $role = (string) ($challenge['role'] ?? 'member');
+        if (! in_array($role, ['member', 'admin'], true)
+            || ! $user
+            || $user->status !== 'active'
+            || $user->role !== $role) {
             Cache::forget($key);
 
-            return response()->json(['message' => 'This member account is not active.'], 403);
+            return response()->json(['message' => 'This account is not active or its role changed.'], 403);
         }
 
         $code = trim($data['code']);
@@ -348,7 +347,7 @@ class AuthController
 
         Cache::forget($key);
 
-        return $this->issueToken((int) $user->id, $challenge['device_name'] ?? null, $request);
+        return $this->issueToken((int) $user->id, $challenge['device_name'] ?? null, $role);
     }
 
     public function resendEmailCode(Request $request)
@@ -398,12 +397,6 @@ class AuthController
 
     public function me(Request $request)
     {
-        try {
-            app(VisitTracker::class)->record($request, 'app', (int) $request->user()->id);
-        } catch (Throwable $e) {
-            report($e);
-        }
-
         return response()->json(['user' => $this->userPayload($request->user())]);
     }
 
@@ -414,22 +407,17 @@ class AuthController
         return response()->json(['message' => 'Signed out.']);
     }
 
-    private function issueToken(int $userId, ?string $deviceName, Request $request)
+    private function issueToken(int $userId, ?string $deviceName, string $role = 'member')
     {
         $user = User::query()->findOrFail($userId);
-        try {
-            app(VisitTracker::class)->record($request, 'app', $userId);
-        } catch (Throwable $e) {
-            report($e);
-        }
-        $expiresAt = now()->addHours(5);
-        $token = $user->createToken($this->deviceName($deviceName), ['member'], $expiresAt);
+        abort_unless(in_array($role, ['member', 'admin'], true) && $user->role === $role && $user->status === 'active', 403);
+        $token = $user->createToken($this->deviceName($deviceName), [$role], now()->addDays(30));
         DB::table('users')->where('id', $userId)->update(['first_login' => false]);
 
         return response()->json([
             'token_type' => 'Bearer',
             'access_token' => $token->plainTextToken,
-            'expires_at' => $expiresAt->toISOString(),
+            'expires_at' => now()->addDays(30)->toISOString(),
             'user' => $this->userPayload($user->refresh()),
         ]);
     }
@@ -459,6 +447,7 @@ class AuthController
     {
         return [
             'id' => (int) $user->id,
+            'role' => (string) $user->role,
             'first_name' => $user->first_name,
             'last_name' => $user->last_name,
             'username' => $user->username,
@@ -491,10 +480,6 @@ class AuthController
     {
         $digits = preg_replace('/\D+/', '', trim($value));
 
-        if (str_starts_with($digits, '00')) {
-            $digits = substr($digits, 2);
-        }
-
         if (str_starts_with($digits, '251')) {
             $digits = substr($digits, 3);
         }
@@ -504,38 +489,6 @@ class AuthController
         }
 
         return preg_match('/^9\d{8}$/', $digits) ? '+251'.$digits : null;
-    }
-
-    private function phoneCandidates(string $value): array
-    {
-        $digits = preg_replace('/\D+/', '', trim($value));
-        $national = $digits;
-        if (str_starts_with($national, '00')) $national = substr($national, 2);
-        if (str_starts_with($national, '251')) $national = substr($national, 3);
-        if (str_starts_with($national, '0')) $national = substr($national, 1);
-
-        if (preg_match('/^9\d{8}$/', $national) !== 1) return [$value];
-
-        return array_values(array_unique([
-            '+251'.$national,
-            '0'.$national,
-            '251'.$national,
-            $national,
-            trim($value),
-        ]));
-    }
-
-    private function phoneDigitCandidates(string $normalizedPhone): array
-    {
-        $digits = preg_replace('/\D+/', '', $normalizedPhone);
-        $national = str_starts_with($digits, '251') ? substr($digits, 3) : $digits;
-
-        return array_values(array_unique([
-            '251'.$national,
-            '0'.$national,
-            $national,
-            '00251'.$national,
-        ]));
     }
 
     private function strongPassword(string $password): bool

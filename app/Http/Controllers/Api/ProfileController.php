@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Support\BrandedEmail;
+use App\Support\VideoDuration;
 use App\Support\UploadStorage;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -121,10 +122,10 @@ class ProfileController
         ]);
         $user = $request->user();
         $oldPicture = $user->profile_picture;
-        $picture = $this->storeUpload($data['profile_picture'], $user, 'profile', 'profile-picture');
+        $picture = $this->storeUpload($data['profile_picture'], 'profile');
         DB::table('users')->where('id', $user->id)->update(['profile_picture' => $picture]);
 
-        if ($oldPicture && $oldPicture !== $picture) {
+        if ($oldPicture && str_starts_with($oldPicture, 'profile/')) {
             app(UploadStorage::class)->delete($oldPicture);
         }
 
@@ -312,6 +313,7 @@ class ProfileController
                     'id_type' => $row->id_type, 'id_number' => $row->id_number, 'status' => $row->status,
                     'rejection_reason' => $row->rejection_reason, 'submitted_at' => $row->submitted_at,
                     'liveness_verified' => (bool) ($row->liveness_verified ?? false),
+                    'rules_accepted' => (bool) ($row->rules_accepted ?? false),
                 ] : null,
             ]);
         }
@@ -328,6 +330,9 @@ class ProfileController
                 break;
             }
         }
+        if (preg_match('/^\d{4}-\d{2}-(\d{2})$/', (string) $request->input('dob'), $dayMatch) && (int) $dayMatch[1] > 30) {
+            throw ValidationException::withMessages(['dob' => ['Choose a day from 01 to 30.']]);
+        }
 
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:160'],
@@ -341,20 +346,26 @@ class ProfileController
             'liveness_verified' => ['required', 'accepted'],
             'rules_accepted' => ['required', 'accepted'],
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
-            'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
+            'video_duration_seconds' => ['required', 'numeric', 'between:5,10'],
         ]);
+        try {
+            VideoDuration::assertAgreementLength($request->file('video_agreement'));
+        } catch (\RuntimeException $exception) {
+            throw ValidationException::withMessages(['video_agreement' => [$exception->getMessage()]]);
+        }
         $saved = [];
         try {
-            $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'), $user, 'kyc', 'personal-photo');
-            $saved['id_front'] = $this->storeUpload($request->file('id_front'), $user, 'kyc', 'id-front');
-            $saved['id_back'] = $request->file('id_back') ? $this->storeUpload($request->file('id_back'), $user, 'kyc', 'id-back') : null;
-            $saved['video_agreement'] = $this->storeUpload($request->file('video_agreement'), $user, 'kyc', 'agreement-video');
+            $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'), $user);
+            $saved['id_front'] = $this->storeUpload($request->file('id_front'), $user);
+            $saved['id_back'] = $request->file('id_back') ? $this->storeUpload($request->file('id_back'), $user) : null;
+            $saved['video_agreement'] = $this->storeUpload($request->file('video_agreement'), $user, 'kyc/videos');
             DB::table('kyc_verifications')->updateOrInsert(['user_id' => $user->id], [
                 'full_name' => trim($data['full_name']), 'dob' => $data['dob'], 'gender' => $data['gender'],
                 'id_type' => $data['id_type'], 'id_number' => trim($data['id_number']),
                 'id_front' => $saved['id_front'], 'id_back' => $saved['id_back'],
-                'liveness_verified' => true, 'liveness_video' => null,
+                'liveness_verified' => $request->boolean('liveness_verified'), 'liveness_video' => null,
                 'video_agreement' => $saved['video_agreement'],
+                'rules_accepted' => $request->boolean('rules_accepted'),
                 'personal_photo' => $saved['personal_photo'],
                 'status' => 'pending', 'rejection_reason' => null, 'submitted_at' => now(), 'reviewed_at' => null, 'approved_by' => null,
             ]);
@@ -367,12 +378,11 @@ class ProfileController
         return response()->json(['message' => 'Identity verification submitted for review.', 'status' => 'pending']);
     }
 
-    private function storeUpload(?UploadedFile $file, $user, string $folder, string $kind): string
+    private function storeUpload(?UploadedFile $file, $user, string $folder = 'kyc'): string
     {
         if (! $file || ! $file->isValid()) throw ValidationException::withMessages(['files' => ['Choose a valid file.']]);
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
-        $username = trim(preg_replace('/[^\pL\pN_-]+/u', '-', (string) $user->username), '-_');
-        $name = mb_substr($username ?: 'member', 0, 48).'-'.$kind.'-'.bin2hex(random_bytes(12)).'.'.$extension;
+        $name = bin2hex(random_bytes(16)).'.'.$extension;
         return app(UploadStorage::class)->putForUser($file, (string) $user->username, (int) $user->id, $folder, $name);
     }
 

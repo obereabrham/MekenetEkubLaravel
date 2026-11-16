@@ -96,9 +96,9 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
         final ad = _map(ekub['ad']);
         for (final key in [
           'title',
-          'description',
+          'body',
           'website_url',
-          'location_name',
+          'location',
         ]) {
           if (_adField(id, key).text.isEmpty && ad[key] != null) {
             _adField(id, key).text = ad[key].toString();
@@ -125,16 +125,15 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
       return;
     }
     await _send(
-      '/merchant/apply',
+      '/merchant/application',
       {
         'business_name': _field('business_name').text.trim(),
         'tin': _field('tin').text.trim(),
         'category': _businessCategory!,
-        'contact_name': _field('contact_name').text.trim(),
         'business_phone': _field('business_phone').text.trim(),
-        'business_email': _field('business_email').text.trim(),
         'address': _field('address').text.trim(),
-        'website_url': _field('website_url').text.trim(),
+        'website': _field('website_url').text.trim(),
+        'location': _field('address').text.trim(),
       },
       files: _tinDocument == null
           ? const {}
@@ -150,6 +149,7 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
       '/merchant/ekubs',
       {
         'name': _field('ekub_name').text.trim(),
+        'category': (_map(_data['merchant'])['category'] ?? '').toString(),
         'frequency': _frequency!,
         'base_amount': double.tryParse(_field('base_amount').text) ?? 0,
         'duration': int.tryParse(_field('duration').text) ?? 0,
@@ -935,6 +935,7 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
     final members = ekub['members'] as List? ?? const [];
     final ad = _map(ekub['ad']);
     final images = ad['images'] as List? ?? const [];
+    final bannerUrl = (ekub['merchant_banner_url'] ?? '').toString();
     final localPhotos = _adImages[id] ?? const <XFile>[];
     final inviteCode = (ekub['join_code'] ?? '').toString();
     final category = (ekub['category'] ?? 'Ekub').toString();
@@ -947,6 +948,17 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
               width: double.infinity,
               height: 182,
               fit: BoxFit.cover,
+            ),
+          )
+        : bannerUrl.isNotEmpty
+        ? GestureDetector(
+            onTap: () => _viewPhoto(url: bannerUrl),
+            child: Image.network(
+              bannerUrl,
+              width: double.infinity,
+              height: 182,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _ekubCoverPlaceholder(),
             ),
           )
         : images.isNotEmpty
@@ -1198,7 +1210,7 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
                       decoration: _inputDecoration('Advertisement title'),
                     ),
                     TextFormField(
-                      controller: _adField(id, 'description'),
+                      controller: _adField(id, 'body'),
                       maxLines: 3,
                       decoration: _inputDecoration('Products or services'),
                     ),
@@ -1208,7 +1220,7 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
                       decoration: _inputDecoration('Website link'),
                     ),
                     TextFormField(
-                      controller: _adField(id, 'location_name'),
+                      controller: _adField(id, 'location'),
                       decoration: _inputDecoration(
                         'Location on this Ekub',
                         hint: 'Area, landmark, city',
@@ -1331,7 +1343,7 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
 
   Widget _mapPreview(Map ad, Map ekub, {required Map merchant}) {
     final location =
-        (ad['location_name'] ?? merchant['address'] ?? 'Merchant location')
+        (ad['location'] ?? merchant['address'] ?? 'Merchant location')
             .toString();
     final lat = double.tryParse(
       '${ad['latitude'] ?? merchant['location_lat']}',
@@ -1353,7 +1365,7 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
   }
 
   Future<void> _decide(int requestId, String action) async {
-    await _send('/merchant/join-requests/$requestId/$action', const {});
+    await _send('/merchant/requests/$requestId/$action', const {});
   }
 
   Future<void> _saveAd(Map ekub, int id) async {
@@ -1364,9 +1376,9 @@ class _MerchantCenterPageState extends State<MerchantCenterPage> {
         'title': _adField(id, 'title').text.trim().isEmpty
             ? (merchantName)
             : _adField(id, 'title').text.trim(),
-        'description': _adField(id, 'description').text.trim(),
+        'body': _adField(id, 'body').text.trim(),
         'website_url': _adField(id, 'website_url').text.trim(),
-        'location_name': _adField(id, 'location_name').text.trim(),
+        'location': _adField(id, 'location').text.trim(),
       },
       files: {
         for (var i = 0; i < picked.length; i++) 'images[$i]': picked[i].path,

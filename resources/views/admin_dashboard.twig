@@ -7,7 +7,7 @@
       <h1>Admin Dashboard</h1>
       <p class="muted">Manage open and active Ekubs. Full groups are in the Full Ekubs list.</p>
     </div>
-    <a class="btn" href="{{url_for('admin_full_ekubs')}}">Full Ekubs <span class="dd-badge">{{full_count}}</span></a>
+    <div class="admin-head-actions"><a class="btn ghost" href="{{url_for('admin_visits')}}">Visit</a><a class="btn" href="{{url_for('admin_full_ekubs')}}">Full Ekubs <span class="dd-badge">{{full_count}}</span></a></div>
   </div>
 
   <div class="admin-stats-grid">
@@ -63,6 +63,7 @@
 </div>
 
 <style>
+.admin-head-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .admin-page-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px}
 .eyebrow{font-size:.72rem;font-weight:800;letter-spacing:.12em;opacity:.65;margin-bottom:5px}
 .muted{opacity:.68;margin:.25rem 0 0}

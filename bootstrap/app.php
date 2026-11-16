@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\AuthenticateSession;
 use App\Http\Middleware\EnsureActiveMember;
 use App\Http\Middleware\RequireRole;
+use App\Http\Middleware\TrackSiteVisit;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,7 +20,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'auth.session' => AuthenticateSession::class,
             'role' => RequireRole::class,
             'member.api' => EnsureActiveMember::class,
+            'admin.api' => \App\Http\Middleware\EnsureActiveAdmin::class,
         ]);
+        $middleware->web(append: [TrackSiteVisit::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {})
     ->create();

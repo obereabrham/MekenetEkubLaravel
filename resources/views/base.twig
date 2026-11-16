@@ -98,10 +98,9 @@
         {% if session.get("user_id") %}
             {% if session.get("role") == "admin" %}
             <nav class="member-shortcuts admin-shortcuts" aria-label="Admin navigation">
-                {% set admin_alert_total = admin_nav_counts.merchants + admin_nav_counts.applications + admin_nav_counts.full_ekubs + admin_nav_counts.pick_winners + admin_nav_counts.kyc + admin_nav_counts.payments + admin_nav_counts.payouts %}
                 <a href="{{url_for('admin_dashboard')}}"><span class="shortcut-icon">⌂</span>Admin Dashboard</a>
-                <a href="{{url_for('partners')}}"><span class="shortcut-icon">♙</span>Add Partner</a>
-                <a href="{{url_for('admin_tools')}}"><span class="shortcut-icon">☷</span>Tools{% if admin_alert_total %}<span class="shortcut-count" title="{{admin_alert_total}} items need review">{{admin_alert_total}}</span>{% endif %}</a>
+                <a href="{{url_for('partners')}}"><span class="shortcut-icon">♧</span>Add Partner</a>
+                <a href="{{url_for('admin_tools')}}"><span class="shortcut-icon">☷</span>Tools</a>
             </nav>
             {% elseif session.get("role") == "partner" %}
             <nav class="partner-shortcuts" aria-label="Partner navigation">
@@ -111,12 +110,14 @@
                 {% if 'member_info' in partner_permissions %}<a href="{{url_for('partner_members')}}"><span class="shortcut-icon">♙</span>Member Info</a>{% endif %}
                 {% if 'recent_winner' in partner_permissions %}<a href="{{url_for('recent_winners')}}"><span class="shortcut-icon">🏆</span>Recently Winner</a>{% endif %}
                 <a href="{{url_for('admin_payment_status')}}"><span class="shortcut-icon">◷</span>Payment Status</a>
+                <a href="{{url_for('admin_deleted_accounts')}}"><span class="shortcut-icon">🗑</span>Deleted Accounts</a>
             </nav>
             {% else %}
             <nav class="member-shortcuts" aria-label="Member navigation">
                 <a href="{{url_for('dashboard')}}"><span class="shortcut-icon">⌂</span>Dashboard</a>
                 <a href="{{url_for('ekubs')}}"><span class="shortcut-icon">◎</span>Available Ekubs</a>
                 <a href="{{url_for('my_ekubs')}}"><span class="shortcut-icon">▤</span>My Joined Ekubs</a>
+                <a href="{{url_for('merchant_portal')}}"><span class="shortcut-icon">♙</span>Merchant</a>
             </nav>
             {% endif %}
         {% else %}
@@ -146,7 +147,7 @@
                 <details class="account-menu">
                     <summary class="account-avatar" aria-label="Open account menu" title="Account menu">
                         {% if me and me['profile_picture'] %}
-                            <img src="{{url_for('uploads', name: me['profile_picture'])}}" alt="Profile picture">
+                            <img src="{{url_for('static', filename: 'uploads/' ~ me['profile_picture'])}}" alt="Profile picture">
                         {% else %}
                             <span>{{(me and me['first_name'] ? me['first_name']|slice(0, 1) : 'U')|upper}}</span>
                         {% endif %}
@@ -167,16 +168,15 @@
                             <a href="{{url_for('contact')}}">Contact</a>
                             <a href="{{url_for('settings')}}">Settings</a>
                         {% elseif session.get("role") == "admin" %}
-                            <a href="{{url_for('admin_ads')}}">▧ &nbsp;Publish Ads</a>
-                            <a href="{{url_for('admin_visits')}}">◷ &nbsp;Visits</a>
-                            <a href="{{url_for('settings')}}">🛡 &nbsp;Settings</a>
+                            <a href="{{url_for('admin_ads')}}">Publish Ads</a>
+                            <a href="{{url_for('admin_visits')}}">Visits</a>
+                            <a href="{{url_for('settings')}}">Settings</a>
                         {% else %}
                             <a href="{{url_for('home')}}">Home</a>
                             <a href="{{url_for('ekubs')}}">Ekubs</a>
                             <a href="{{url_for('about')}}">About Us</a>
                             <a href="{{url_for('contact')}}">Contact</a>
                             <a href="{{url_for('profile')}}">My Profile</a>
-                            <a href="{{url_for('merchant_portal')}}">Merchant account</a>
                             <a href="{{url_for('apply_ekub')}}">Apply Ekub</a>
                             <a href="{{url_for('finished_ekubs')}}">Finished Ekubs</a>
                             <a href="{{url_for('status')}}">My Status</a>
@@ -285,6 +285,33 @@
                     Contact
                 </a>
 
+                {% if session.get("user_id") %}
+                <div class="footer-rating-panel" id="footer-rating">
+                    <strong>Rate your experience</strong>
+                    <p>Your review helps the Ekub community.</p>
+                    <form class="footer-rating-form" method="post" action="{{url_for('rate_website')}}">
+                        {{csrf_field()}}
+                        <input type="hidden" name="return_to" value="/">
+                        <label for="footer-site-rating">Your rating</label>
+                        <select id="footer-site-rating" name="rating" required>
+                            <option value="5">★★★★★ — Excellent</option>
+                            <option value="4">★★★★☆ — Good</option>
+                            <option value="3">★★★☆☆ — Okay</option>
+                            <option value="2">★★☆☆☆ — Poor</option>
+                            <option value="1">★☆☆☆☆ — Very poor</option>
+                        </select>
+                        <label for="footer-site-comment">Comment</label>
+                        <textarea id="footer-site-comment" name="comment" maxlength="1000" rows="3" placeholder="Share your experience (optional)"></textarea>
+                        <button class="footer-rating-submit" type="submit">Share review</button>
+                    </form>
+                    <a class="footer-reviews-link" href="{{url_for('home')}}#community-reviews">Read community reviews</a>
+                </div>
+                {% else %}
+                <a href="{{url_for('login')}}?return_to=%2Fprofile%23website-rating">
+                    Sign in to rate this website
+                </a>
+                {% endif %}
+
                 {% if not session.get("user_id") %}
                 <a href="{{url_for('login')}}">
                     Sign In
@@ -305,27 +332,6 @@
             <div class="footer-column footer-social-column">
                 <h4>Follow Us</h4>
                 {% include '_social_links.twig' %}
-            </div>
-
-            <div class="footer-column footer-rating-column">
-                <h4>Rate our website</h4>
-                <form class="footer-rating-form" method="post" action="/website-rating">
-                    {{ csrf_field() }}
-                    <label for="footerRatingName">Your name</label>
-                    <input id="footerRatingName" name="display_name" maxlength="80" required placeholder="Name">
-                    <label for="footerRatingScore">Rating</label>
-                    <select id="footerRatingScore" name="rating" required>
-                        <option value="5">★★★★★ · Excellent</option>
-                        <option value="4">★★★★ · Good</option>
-                        <option value="3">★★★ · Okay</option>
-                        <option value="2">★★ · Poor</option>
-                        <option value="1">★ · Needs work</option>
-                    </select>
-                    <label for="footerRatingComment">Comment</label>
-                    <textarea id="footerRatingComment" name="comment" rows="3" maxlength="1000" required placeholder="Share your experience"></textarea>
-                    <button type="submit">Send review</button>
-                </form>
-                <a href="{{url_for('home')}}#community-ratings">Read community reviews</a>
             </div>
 
 
@@ -372,7 +378,6 @@
     <script
         src="{{url_for('static', filename: 'js/main.js')}}"
     ></script>
-
     <script src="{{url_for('static', filename: 'js/amharic.js')}}"></script>
 
     {% block scripts %}{% endblock %}
