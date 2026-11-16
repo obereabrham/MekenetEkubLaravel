@@ -1,6 +1,6 @@
 <?php
 return [
-    'categories' => ['Student','Merkato Merchants','Teachers',"Driver's",'Government Employees',"Item's Ekub"],
+    'categories' => ['Student','Merkato Merchants','Teachers','Worker',"Driver's",'Government Employees',"Item's Ekub"],
     'frequencies' => ['Daily','Weekly','Monthly'],
     'methods' => ['Telebirr','CBE','Binance Pay'],
     'banks' => ['Commercial Bank of Ethiopia (CBE)','Telebirr','Awash Bank','Bank of Abyssinia','Dashen Bank','Wegagen Bank','Hibret Bank','Nib International Bank','Cooperative Bank of Oromia','Oromia Bank','Zemen Bank','Bunna Bank','Berhan Bank','Abay Bank','Addis International Bank','Enat Bank','Lion International Bank','Global Bank Ethiopia','Siinqee Bank','Tsehay Bank','Amhara Bank','Ahadu Bank','Gadaa Bank','Hijra Bank','ZamZam Bank','Shabelle Bank','Goh Betoch Bank','M-Pesa (Safaricom)'],

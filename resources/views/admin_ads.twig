@@ -7,9 +7,9 @@
   {% for n in slots %}{% set a = ads|get(n) %}
     <article class="ad-card">
       <div class="ad-card-top"><b>Ad {{n}}</b><span class="ad-state {{ a ? 'on' : '' }}">{{ a ? 'Published' : 'Empty' }}</span></div>
-      <div class="ad-preview">{% if a %}<img src="{{url_for('static', filename: 'uploads/' ~ a.image)}}" alt="Ad {{n}}">{% else %}<span>No image</span>{% endif %}</div>
+      <div class="ad-preview">{% if a %}<img src="{{url_for('uploads', name: a.image)}}" alt="Ad {{n}}">{% else %}<span>No image</span>{% endif %}</div>
       <form method="post" action="{{url_for('admin_ad_save', slot: n)}}" enctype="multipart/form-data">{{ csrf_field() }}
-        <input type="file" name="image" accept="image/*" required>
+        <label>Image (max 1 MB)<input type="file" name="image" accept="image/jpeg,image/png,image/webp,image/gif" required></label>
         <button class="ad-btn" type="submit">{{ a ? 'Change' : 'Publish' }}</button>
       </form>
       {% if a %}<form method="post" action="{{url_for('admin_ad_delete', slot: n)}}" data-confirm="Remove ad {{n}}?" data-confirm-ok="Yes, remove">{{ csrf_field() }}<button class="ad-btn ad-del" type="submit">Remove</button></form>{% endif %}

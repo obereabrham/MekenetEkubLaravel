@@ -89,22 +89,35 @@
                     <strong>{{members|length}}</strong>
                 </div>
 
-                {% if me and me.role == 'member' and ekub.status == 'open' and not is_full and not already_joined %}
+                {% if me and me.role == 'member' and ekub.status == 'open' and not is_full and not already_joined and (not join_request or join_request.status == 'rejected') %}
                     <a class="btn btn-primary btn-large ekub-join-button" href="{{url_for('join_ekub', ekub_id: ekub.id)}}">
-                        Join Ekub <span aria-hidden="true">→</span>
+                        {% if merchant_owned %}Enter invite code{% else %}Join Ekub{% endif %} <span aria-hidden="true">→</span>
                     </a>
                 {% endif %}
 
-                {% if already_joined %}<small class="action-note"><strong>✓ You have joined this Ekub.</strong></small>{% elseif ekub.status == 'open' and is_full %}<small class="action-note"><strong>This Ekub is full.</strong> No more members can be added.</small>{% elseif ekub.status == 'open' %}<small class="action-note">Please review the contribution amount and schedule before joining.</small>{% endif %}
+                {% if already_joined %}<small class="action-note"><strong>✓ You have joined this Ekub.</strong></small>{% elseif join_request and join_request.status == 'pending' %}<small class="action-note"><strong>Your request is waiting for merchant approval.</strong></small>{% elseif ekub.status == 'open' and is_full %}<small class="action-note"><strong>This Ekub is full.</strong> No more members can be added.</small>{% elseif ekub.status == 'open' and merchant_owned %}<small class="action-note">This private Ekub requires an invite code and merchant approval. Payments are still reviewed by Mekenet Ekub administrators.</small>{% elseif ekub.status == 'open' %}<small class="action-note">Please review the contribution amount and schedule before joining.</small>{% endif %}
             </aside>
         </div>
+
+        {% if merchant_owned %}
+        <section class="merchant-ekub-ad">
+          <div class="merchant-ad-heading"><div><span class="section-kicker">Merchant hosted</span><h2>{{merchant_ad.title|default(merchant_info.business_name|default('Local merchant'))}}</h2><p>{{merchant_info.category|default('Verified merchant')}}</p></div>{% if merchant_ad.website_url|default(merchant_info.website_url) %}<a class="btn ghost" href="{{merchant_ad.website_url|default(merchant_info.website_url)}}" target="_blank" rel="noopener">Visit website ↗</a>{% endif %}</div>
+          {% if merchant_ad.description|default('') %}<p class="merchant-ad-description">{{merchant_ad.description}}</p>{% endif %}
+          {% if merchant_ad.images|default([]) %}<div class="merchant-ad-images">{% for image in merchant_ad.images %}<a href="{{image}}" target="_blank" rel="noopener"><img src="{{image}}" alt="{{merchant_ad.title}} image {{loop.index}}"></a>{% endfor %}</div>{% endif %}
+          {% if merchant_ad.location_name|default('') or merchant_ad.latitude is not null or merchant_info.location_lat is not null %}
+            {% set map_lat = merchant_ad.latitude|default(merchant_info.location_lat|default('')) %}{% set map_lng = merchant_ad.longitude|default(merchant_info.location_lng|default('')) %}
+            {% if map_lat != '' and map_lng != '' %}<a class="merchant-map-card" href="https://www.google.com/maps/search/?api=1&amp;query={{map_lat}},{{map_lng}}" target="_blank" rel="noopener" aria-label="Open merchant location in Google Maps"><iframe title="Map showing {{merchant_ad.location_name|default(merchant_info.business_name)}}" src="https://maps.google.com/maps?q={{map_lat}},{{map_lng}}&amp;z=15&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" tabindex="-1"></iframe><span><b>⌖ {{merchant_ad.location_name|default(merchant_info.address|default(merchant_info.business_name))}}</b><small>Map location data © OpenStreetMap contributors · Tap to open Google Maps ↗</small></span></a>{% elseif merchant_ad.location_name|default('') %}<div class="merchant-map-label">⌖ {{merchant_ad.location_name}}</div>{% endif %}
+          {% endif %}
+        </section>
+        <style>.merchant-ekub-ad{margin:24px 0;padding:clamp(18px,3vw,28px);border:1px solid var(--border);border-radius:24px;background:var(--card,rgba(255,255,255,.04))}.merchant-ad-heading{display:flex;justify-content:space-between;gap:18px;align-items:center}.merchant-ad-heading h2{margin:6px 0}.merchant-ad-heading p,.merchant-ad-description{color:var(--muted)}.merchant-ad-images{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:18px 0}.merchant-ad-images img{display:block;width:100%;height:210px;object-fit:cover;border-radius:16px}.merchant-map-card{position:relative;display:block;height:230px;overflow:hidden;border:1px solid var(--border);border-radius:18px;color:inherit;text-decoration:none;background:linear-gradient(135deg,#dff4ea,#d8ecf7)}.merchant-map-card iframe{width:100%;height:100%;border:0;pointer-events:none;filter:saturate(.78)}.merchant-map-card span{position:absolute;left:12px;right:12px;bottom:12px;display:grid;gap:4px;padding:12px 14px;border-radius:13px;background:rgba(8,25,22,.88);color:white}.merchant-map-card small{opacity:.76}.merchant-map-label{padding:16px;border-radius:14px;background:var(--panel,rgba(255,255,255,.06))}@media(max-width:600px){.merchant-ad-heading{align-items:flex-start;flex-direction:column}.merchant-ad-images{grid-template-columns:1fr}.merchant-ad-images img{height:230px}}</style>
+        {% endif %}
 
 {% set imgs = item_images|default([]) %}
         {% if imgs %}
         <section class="ekub-members-card item-gallery">
             <div class="section-heading"><div><span class="section-kicker">Item Ekub</span><h2>Item images</h2></div></div>
             <div class="item-gallery-grid">
-            {% for v in imgs %}<img class="item-thumb" src="{{url_for('static', filename: 'uploads/' ~ v)}}" alt="Item image {{loop.index}}" tabindex="0">{% endfor %}
+            {% for v in imgs %}<img class="item-thumb" src="{{url_for('uploads', name: v)}}" alt="Item image {{loop.index}}" tabindex="0">{% endfor %}
             </div>
         </section>
         <div class="img-lightbox" id="imgLightbox"><button type="button" class="img-lightbox-close" aria-label="Close">×</button><img alt="Item image"></div>
@@ -149,7 +162,7 @@
                             <tr>
                                 <td>
                                     <div class="member-cell">
-                                        <span class="member-avatar">{{(m.first_name ? m.first_name|slice(0, 1) : 'U')|upper}}</span>
+                                        <span class="member-avatar">{% if m.profile_picture %}<img src="{{url_for('uploads', name: m.profile_picture)}}" alt="{{m.first_name}} profile picture">{% else %}{{(m.first_name ? m.first_name|slice(0, 1) : 'U')|upper}}{% endif %}</span>
                                         <div>
                                             <strong>{{m.first_name}} {{m.last_name}}</strong>
                                             <small>Ekub member</small>

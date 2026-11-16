@@ -32,6 +32,8 @@
 	<string>Show the in-app live face check and capture identity photos for verification.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Record the separate agreement video you submit for identity verification.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to unlock your Mekenet Ekub app when app lock is enabled.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

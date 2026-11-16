@@ -38,7 +38,7 @@
                     <p class="my-ekub-meta"><span>{{r.frequency}}</span><b>•</b><span>{{r.duration}} periods</span></p>
                 </div>
                 <div class="my-ekub-status {% if r.member_status == 'active' or r.status == 'started' %}active{% endif %}">
-                    {% if r.status == 'started' %}Started{% elseif r.status == 'open' %}Open{% else %}{{r.status|capitalize}}{% endif %}
+                    {% if r.is_full %}Full{% elseif r.status == 'started' %}Started{% elseif r.status == 'open' %}Open{% else %}{{r.status|capitalize}}{% endif %}
                 </div>
             </div>
 

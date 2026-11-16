@@ -319,6 +319,30 @@ Mekenet Ekub | Digital Ekub Platform
 <!-- RULE -->
 <!-- ================================= -->
 
+<section class="community-ratings" id="community-ratings">
+    <div class="ratings-heading">
+        <span class="section-label">COMMUNITY FEEDBACK</span>
+        <h2>What people say about Mekenet Ekub</h2>
+        <p>Reviews shared through the website footer are visible here to everyone.</p>
+    </div>
+    <div class="ratings-grid">
+        {% for review in ratings|default([]) %}
+        <article class="rating-card">
+            <div class="rating-stars" aria-label="{{review.rating}} out of 5 stars">{% for star in 1..5 %}{{ star <= review.rating ? '★' : '☆' }}{% endfor %}</div>
+            <p>{{review.comment}}</p>
+            <strong>{{review.display_name}}</strong>
+            <small>{{review.created_at}}</small>
+        </article>
+        {% else %}
+        <article class="rating-card rating-empty"><p>Be the first to leave a review using the form in the footer.</p></article>
+        {% endfor %}
+    </div>
+</section>
+
+<style>
+.community-ratings{max-width:1180px;margin:0 auto;padding:54px 22px}.ratings-heading{max-width:680px;margin-bottom:22px}.ratings-heading h2{margin:8px 0;font-size:clamp(1.6rem,3vw,2.25rem)}.ratings-heading p{color:var(--muted)}.ratings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}.rating-card{padding:20px;border:1px solid var(--border);border-radius:18px;background:var(--surface);box-shadow:0 10px 30px #102a1a0c}.rating-card p{line-height:1.55;color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere}.rating-card strong,.rating-card small{display:block}.rating-card small{margin-top:5px;color:var(--muted);font-size:.75rem}.rating-stars{color:#88b44a;letter-spacing:.08em;font-size:1.1rem}.rating-empty{color:var(--muted)}
+</style>
+
 <section class="rule-section">
 
     <div class="rule-card">

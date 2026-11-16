@@ -19,8 +19,11 @@
   const liveValue = document.getElementById('livenessVerified');
   const liveStatus = document.getElementById('liveCheckStatus');
   const liveSlot = document.getElementById('liveSlot');
+  const personalPhotoInput = form.querySelector('input[name="personal_photo"]');
+  const rulesAccepted = document.getElementById('kycRulesAccepted');
+  const rulesError = document.getElementById('kycRulesError');
   const steps = [
-    'Center your face in the guide and hold still.',
+    'AI-check your personal photo, then center your live face and hold still.',
     'Blink both eyes naturally two times.',
     'Turn your head left, then right, then face forward.'
   ];
@@ -77,7 +80,7 @@
     liveNext.hidden = true;
     clearStep();
     liveStepCount.textContent = 'READY';
-    liveStepText.textContent = 'Allow camera access to start. The live check is processed here and no check video is made.';
+    liveStepText.textContent = 'Allow in-page camera access. The AI checks face presence and live movement; no live-check video is saved.';
   }
 
   function processFace(result) {
@@ -157,6 +160,12 @@
 
   document.getElementById('openLiveCheck').addEventListener('click', function () {
     resetRun();
+    if (!personalPhotoInput.files || !personalPhotoInput.files.length) {
+      liveSlot.classList.add('missing');
+      liveStatus.textContent = 'Add your personal photo before starting the live face check.';
+      personalPhotoInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     liveDialog.showModal();
   });
   liveStart.addEventListener('click', async function () {
@@ -173,10 +182,29 @@
       const files = await vision.FilesetResolver.forVisionTasks(wasmPath);
       landmarker = await vision.FaceLandmarker.createFromOptions(files, {
         baseOptions: { modelAssetPath: modelPath, delegate: 'CPU' },
-        runningMode: 'VIDEO',
+        runningMode: 'IMAGE',
         numFaces: 1,
         outputFaceBlendshapes: true
       });
+      const referencePhoto = personalPhotoInput.files && personalPhotoInput.files[0];
+      if (!referencePhoto) throw new Error('Add your personal photo before starting the live face check.');
+      if (referencePhoto.size > 1024 * 1024) throw new Error('Each KYC image must be 1 MB or smaller. Choose a smaller personal photo.');
+      liveStepText.textContent = 'Checking your personal photo for one clear face…';
+      const referenceUrl = URL.createObjectURL(referencePhoto);
+      try {
+        const referenceImage = new Image();
+        referenceImage.src = referenceUrl;
+        await referenceImage.decode();
+        const referenceFaces = landmarker.detect(referenceImage).faceLandmarks || [];
+        if (referenceFaces.length !== 1) {
+          throw new Error(referenceFaces.length === 0
+            ? 'The personal photo needs one clear face. Choose another photo.'
+            : 'Use a personal photo that shows only your face.');
+        }
+        await landmarker.setOptions({ runningMode: 'VIDEO' });
+      } finally {
+        URL.revokeObjectURL(referenceUrl);
+      }
       stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 840 } },
         audio: false
@@ -191,7 +219,9 @@
       animation = requestAnimationFrame(checkFrame);
     } catch (error) {
       stopLive();
-      liveError.textContent = 'Could not start the in-page face check. Allow camera access and use the site over HTTPS, then try again.';
+      liveError.textContent = error instanceof Error && error.message
+        ? error.message
+        : 'Could not start the in-page face check. Allow camera access and use the site over HTTPS, then try again.';
       liveStart.disabled = false;
       liveStepText.textContent = 'Camera and on-device face detection are required to continue.';
     }
@@ -201,7 +231,7 @@
     if (stage === steps.length - 1) {
       liveValue.value = '1';
       liveSlot.classList.remove('missing');
-      liveStatus.textContent = 'Live face check passed on this device.';
+      liveStatus.textContent = 'On-device face and live-movement checks passed. Admin review is still required.';
       liveDialog.close();
       stopLive();
       return;
@@ -227,7 +257,7 @@
     backSlot.style.display = passport ? 'none' : '';
     backInput.disabled = passport;
     if (passport) { clearSlot(backSlot); frontLabel.textContent = 'Passport (1 image)'; frontInput.accept = 'image/*'; }
-    else { frontLabel.textContent = 'National ID – Front'; frontInput.accept = 'image/*,.pdf'; }
+    else { frontLabel.textContent = 'National ID – Front'; frontInput.accept = 'image/*'; }
   }
   idType.addEventListener('change', applyIdType);
   applyIdType();
@@ -245,14 +275,25 @@
     input.addEventListener('change', function () {
       preview.innerHTML = '';
       slot.classList.remove('missing');
+      if (input === personalPhotoInput) {
+        liveValue.value = '';
+        liveStatus.textContent = 'Personal photo changed. Complete the live face check again.';
+      }
       const file = input.files && input.files[0];
       if (!file) { if (input === agreementInput) agreementDurationInput.value = ''; return; }
+      const isImage = file.type.indexOf('image/') === 0 || /\.(jpe?g|png|webp|gif)$/i.test(file.name);
       const capturedInPage = input === agreementInput && agreementGenerated;
       if (capturedInPage) {
         agreementGenerated = false;
         agreementDurationInput.value = agreementDurationSeconds.toFixed(3);
       }
-      if (file.type.indexOf('image/') === 0 && file.size > 1024 * 1024) {
+      if (input.dataset.kind === 'image' && !isImage) {
+        input.value = '';
+        slot.classList.add('missing');
+        preview.textContent = 'Choose an image file for this KYC document.';
+        return;
+      }
+      if (input.dataset.kind === 'image' && file.size > 1024 * 1024) {
         input.value = '';
         slot.classList.add('missing');
         preview.textContent = 'Images must be 1 MB or smaller. Choose a smaller image.';
@@ -452,8 +493,19 @@
     if (agreementObjectUrl) URL.revokeObjectURL(agreementObjectUrl);
   });
 
+  rulesAccepted.addEventListener('change', function () {
+    if (rulesAccepted.checked) rulesError.classList.remove('show');
+  });
+
   form.addEventListener('submit', function (event) {
     let firstMissing = null;
+    if (!rulesAccepted.checked) {
+      event.preventDefault();
+      rulesError.classList.add('show');
+      rulesAccepted.focus();
+      rulesAccepted.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
     const uploadedDuration = Number(agreementDurationInput.value);
     if (!Number.isFinite(uploadedDuration) || uploadedDuration < 5 || uploadedDuration > 10) {
       event.preventDefault();

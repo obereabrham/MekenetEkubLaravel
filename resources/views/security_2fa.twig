@@ -4,24 +4,38 @@
 <section class="auth-page">
   <div class="auth-card">
     <h1>Account security</h1>
-    <p>Choose how you want to receive your second sign-in code: an authenticator app or email.</p>
-    {% if enabled %}
-      <div class="success-banner"><span class="success-check">✓</span><div><strong>{% if method == 'email' %}Email OTP is enabled{% else %}Authenticator app is enabled{% endif %}</strong><small>{% if method == 'email' %}Sign-in codes are sent to {{email}}.{% else %}Your password is followed by a code from your authenticator app.{% endif %}</small></div></div>
-      <form method="post" class="auth-form" data-confirm="Disable two-factor sign-in? You will sign in with your password only." data-confirm-ok="Yes, disable">{{ csrf_field() }}
-        <input type="hidden" name="action" value="disable">
-        <button class="btn btn-secondary" type="submit">Disable two-factor sign-in</button>
-      </form>
+    {% if mandatory_for_role %}
+      <p>Admin and partner accounts must verify both their email and authenticator app every time they sign in.</p>
+    {% else %}
+      <p>Choose how you want to receive your second sign-in code: an authenticator app or email.</p>
     {% endif %}
-    <div class="auth-form">
-      <h2>Authenticator app</h2>
-      <p>Use Google Authenticator, Microsoft Authenticator, or another TOTP app.</p>
-      <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="authenticator"><button class="btn btn-primary" type="submit">Set up authenticator app</button></form>
-    </div>
-    <div class="auth-form">
-      <h2>Email one-time code</h2>
-      <p>{% if email %}Send a verification code to {{email}} and enter it below to enable email sign-in.{% else %}Add a valid email address to your profile before enabling email OTP.{% endif %}</p>
-      <form method="post">{{ csrf_field() }}<input type="hidden" name="action" value="email"><button class="btn btn-primary" type="submit">Set up email OTP</button></form>
-    </div>
+    {% if enabled %}
+      <div class="success-banner"><span class="success-check">✓</span><div><strong>{% if email_enabled and authenticator_enabled %}Both verification methods are enabled{% elseif email_enabled %}Email OTP is enabled{% else %}Authenticator app is enabled{% endif %}</strong><small>{% if mandatory_for_role %}Both an email code and an authenticator code are required at every sign-in.{% elseif email_enabled and authenticator_enabled %}At sign-in, choose an email code or your authenticator app.{% elseif email_enabled %}Sign-in codes are sent to {{email}}.{% else %}Your password is followed by a code from your authenticator app.{% endif %}</small></div></div>
+      {% if not mandatory_for_role %}
+        <form method="post" class="auth-form" data-confirm="Disable two-factor sign-in? You will sign in with your password only." data-confirm-ok="Yes, disable">{{ csrf_field() }}
+          <input type="hidden" name="action" value="disable">
+          <button class="btn btn-secondary" type="submit">🛡 Disable two-factor sign-in</button>
+        </form>
+      {% endif %}
+    {% endif %}
+    {% if authenticator_enabled %}
+      <div class="auth-form"><h2>🛡 Authenticator app</h2><p>Your authenticator is ready.{% if mandatory_for_role %} Its code is required alongside your email code at sign-in.{% else %} Use its current code at sign-in{% if email_enabled %}, or choose email instead{% endif %}.{% endif %}</p><strong>Enabled</strong></div>
+    {% else %}
+      <div class="auth-form">
+        <h2>🛡 Authenticator app</h2>
+        <p>Use Google Authenticator, Microsoft Authenticator, or another TOTP app.</p>
+        <form method="post" data-confirm="Add an authenticator app as a sign-in verification method? You will need access to it when signing in." data-confirm-danger="false">{{ csrf_field() }}<input type="hidden" name="action" value="authenticator"><button class="btn btn-primary" type="submit">🛡 Set up authenticator app</button></form>
+      </div>
+    {% endif %}
+    {% if email_enabled %}
+      <div class="auth-form"><h2>✉ Email one-time code</h2><p>Email verification is enabled for {{email}}.{% if mandatory_for_role %} A code is required alongside your authenticator code at sign-in.{% else %} Use either configured method at sign-in{% if authenticator_enabled %} or choose your authenticator app{% endif %}.{% endif %}</p><strong>Enabled</strong></div>
+    {% else %}
+      <div class="auth-form">
+        <h2>✉ Email one-time code</h2>
+        <p>{% if email %}Send a verification code to {{email}} and enter it below to enable email sign-in.{% else %}Add a valid email address to your profile before enabling email OTP.{% endif %}</p>
+        <form method="post" data-confirm="Add email codes as a sign-in verification method? You will need access to {{email}} when signing in." data-confirm-danger="false">{{ csrf_field() }}<input type="hidden" name="action" value="email"><button class="btn btn-primary" type="submit">🛡 Set up email OTP</button></form>
+      </div>
+    {% endif %}
     {% if email_pending %}
       <hr>
       <h2>Verify your email</h2>
@@ -36,7 +50,8 @@
     {% if secret %}
       <hr>
       <h2>Set up your authenticator app</h2>
-      <p>In Google Authenticator, Microsoft Authenticator, or another TOTP app, add an account using this secret:</p>
+      <p>Scan this QR code using Google Authenticator, Microsoft Authenticator, or another TOTP app. If scanning is unavailable, add an account using this setup key:</p>
+      <img class="authenticator-qr" src="{{qr_data}}" width="240" height="240" alt="Authenticator setup QR code">
       <p><strong>{{secret}}</strong></p>
       <p>Account URI: <code style="overflow-wrap:anywhere">{{uri}}</code></p>
       <form method="post" action="{{url_for('confirm_2fa')}}" class="auth-form">{{ csrf_field() }}

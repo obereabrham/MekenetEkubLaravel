@@ -56,7 +56,7 @@
         <button type="button" class="image-upload-box add-image-tile" id="addImageBtn" aria-label="Add another image">
           <span class="upload-plus">＋</span>
           <strong>Add image</strong>
-          <small>No limit - add as many as you need</small>
+          <small>Each image can be up to 1 MB</small>
         </button>
       </div>
       <p class="upload-count" id="imageCount">0 images selected</p>
@@ -95,6 +95,17 @@
     input.addEventListener('change', () => {
       const files = Array.from(input.files);
       if (!files.length) { box.dataset.hasFile = '0'; preview.hidden = true; updateCount(); return; }
+      if (files.some(file => file.size > 1024 * 1024)) {
+        alert('Each image must be 1 MB or smaller.');
+        input.value = '';
+        box.dataset.hasFile = '0';
+        preview.removeAttribute('src');
+        preview.hidden = true;
+        box.querySelector('strong').textContent = 'Choose image';
+        box.querySelectorAll('.upload-plus,small').forEach(x => x.hidden = false);
+        updateCount();
+        return;
+      }
       box.dataset.hasFile = '1';
       preview.src = URL.createObjectURL(files[0]); preview.hidden = false;
       box.querySelector('strong').textContent = files.length > 1 ? files.length + ' images' : files[0].name;

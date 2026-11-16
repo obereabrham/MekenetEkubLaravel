@@ -121,10 +121,10 @@ class ProfileController
         ]);
         $user = $request->user();
         $oldPicture = $user->profile_picture;
-        $picture = $this->storeUpload($data['profile_picture'], 'profile');
+        $picture = $this->storeUpload($data['profile_picture'], $user, 'profile', 'profile-picture');
         DB::table('users')->where('id', $user->id)->update(['profile_picture' => $picture]);
 
-        if ($oldPicture && str_starts_with($oldPicture, 'profile/')) {
+        if ($oldPicture && $oldPicture !== $picture) {
             app(UploadStorage::class)->delete($oldPicture);
         }
 
@@ -339,15 +339,16 @@ class ProfileController
             'id_front' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'id_back' => ['required_if:id_type,National ID', 'nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:1024'],
             'liveness_verified' => ['required', 'accepted'],
+            'rules_accepted' => ['required', 'accepted'],
             'video_agreement' => ['required', 'file', 'mimes:mp4,mov,webm', 'max:51200'],
             'video_duration_seconds' => ['required', 'numeric', 'min:5', 'max:10'],
         ]);
         $saved = [];
         try {
-            $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'));
-            $saved['id_front'] = $this->storeUpload($request->file('id_front'));
-            $saved['id_back'] = $request->file('id_back') ? $this->storeUpload($request->file('id_back')) : null;
-            $saved['video_agreement'] = $this->storeUpload($request->file('video_agreement'));
+            $saved['personal_photo'] = $this->storeUpload($request->file('personal_photo'), $user, 'kyc', 'personal-photo');
+            $saved['id_front'] = $this->storeUpload($request->file('id_front'), $user, 'kyc', 'id-front');
+            $saved['id_back'] = $request->file('id_back') ? $this->storeUpload($request->file('id_back'), $user, 'kyc', 'id-back') : null;
+            $saved['video_agreement'] = $this->storeUpload($request->file('video_agreement'), $user, 'kyc', 'agreement-video');
             DB::table('kyc_verifications')->updateOrInsert(['user_id' => $user->id], [
                 'full_name' => trim($data['full_name']), 'dob' => $data['dob'], 'gender' => $data['gender'],
                 'id_type' => $data['id_type'], 'id_number' => trim($data['id_number']),
@@ -366,12 +367,13 @@ class ProfileController
         return response()->json(['message' => 'Identity verification submitted for review.', 'status' => 'pending']);
     }
 
-    private function storeUpload(?UploadedFile $file, string $folder = 'kyc'): string
+    private function storeUpload(?UploadedFile $file, $user, string $folder, string $kind): string
     {
         if (! $file || ! $file->isValid()) throw ValidationException::withMessages(['files' => ['Choose a valid file.']]);
         $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension());
-        $name = bin2hex(random_bytes(16)).'.'.$extension;
-        return app(UploadStorage::class)->put($file, $folder.'/'.$name);
+        $username = trim(preg_replace('/[^\pL\pN_-]+/u', '-', (string) $user->username), '-_');
+        $name = mb_substr($username ?: 'member', 0, 48).'-'.$kind.'-'.bin2hex(random_bytes(12)).'.'.$extension;
+        return app(UploadStorage::class)->putForUser($file, (string) $user->username, (int) $user->id, $folder, $name);
     }
 
     public function security(Request $request)

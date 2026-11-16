@@ -103,8 +103,9 @@ class PaymentController
         $currency = $isBinance ? 'USDT' : 'ETB';
         $currencyAmount = $isBinance ? round($amount / $exchangeRate, 8) : $amount;
         $receipt = $data['screenshot'];
-        $filename = 'payment-'.Str::uuid().'.'.strtolower($receipt->getClientOriginalExtension());
-        $screenshotPath = app(UploadStorage::class)->put($receipt, 'payments/'.$filename);
+        $username = trim(preg_replace('/[^\pL\pN_-]+/u', '-', (string) $user->username), '-_');
+        $filename = mb_substr($username ?: 'member', 0, 48).'-payment-'.Str::uuid().'.'.strtolower($receipt->getClientOriginalExtension());
+        $screenshotPath = app(UploadStorage::class)->putForUser($receipt, (string) $user->username, (int) $user->id, 'payments', $filename);
 
         try {
             $paymentId = DB::table('payments')->insertGetId([

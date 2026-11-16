@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
+import 'app_translation.dart';
+
+typedef Text = LocalizedText;
 
 const _agreementGreen = Color(0xFF88B44A);
 const _agreementSky = Color(0xFF43B5D4);
@@ -152,7 +155,10 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
 
   void _useVideo() {
     final clip = _recordedVideo;
-    if (clip != null) Navigator.of(context).pop(AgreementVideoCaptureResult(clip, _recordedSeconds));
+    if (clip != null)
+      Navigator.of(
+        context,
+      ).pop(AgreementVideoCaptureResult(clip, _recordedSeconds));
   }
 
   Future<void> _cancel() async {
@@ -324,7 +330,7 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                   const SizedBox(height: 8),
                   const Text('“I Agree by Mekenet Ekub Rules.”'),
                   const SizedBox(height: 3),
-                  const Text('“በመቀነት እቁበ ህግ እና ደንብ ተስማምቻልው፡፡”'),
+                  const Text('“በመቀነት እቁብ ህግ እና ደንብ ተስማምቻልው፡፡”'),
                   const SizedBox(height: 10),
                   Text(
                     'Record here in the app. The separate live face check is not recorded. Minimum 5 seconds; it stops automatically at 10 seconds.',
@@ -369,7 +375,9 @@ class _AgreementVideoCapturePageState extends State<AgreementVideoCapturePage> {
                         style: FilledButton.styleFrom(
                           backgroundColor: const Color(0xFFD84A4A),
                         ),
-                        onPressed: _busy || _seconds < 5 ? null : _stopRecording,
+                        onPressed: _busy || _seconds < 5
+                            ? null
+                            : _stopRecording,
                         icon: const Icon(Icons.stop_rounded),
                         label: const Text('Stop recording'),
                       ),

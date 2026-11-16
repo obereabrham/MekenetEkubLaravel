@@ -1,0 +1,59 @@
+{% extends 'base.twig' %}
+{% block title %}Admin Tools | Mekenet Ekub{% endblock %}
+{% block content %}
+<main class="admin-tools-page">
+  <header class="admin-tools-heading">
+    <div><span class="admin-tools-kicker">ADMIN PORTAL</span><h1>Admin Tools</h1><p>Open an area to review requests, manage Ekubs, and update the site.</p></div>
+  </header>
+
+  <section class="admin-tools-group">
+    <h2>Requests to review</h2>
+    <div class="admin-tools-grid">
+      <a class="admin-tool-card" href="{{url_for('admin_merchants')}}"><span class="admin-tool-icon">♙</span><span class="admin-tool-copy"><strong>Merchants</strong><small>Review business applications</small></span>{% if admin_nav_counts.merchants %}<span class="shortcut-count">{{admin_nav_counts.merchants}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_applied_ekubs')}}"><span class="admin-tool-icon">▤</span><span class="admin-tool-copy"><strong>Applied Ekubs</strong><small>Review member Ekub requests</small></span>{% if admin_nav_counts.applications %}<span class="shortcut-count">{{admin_nav_counts.applications}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_kyc')}}"><span class="admin-tool-icon">✓</span><span class="admin-tool-copy"><strong>KYC Approval</strong><small>Review identity verification</small></span>{% if admin_nav_counts.kyc %}<span class="shortcut-count">{{admin_nav_counts.kyc}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_payment_approval')}}"><span class="admin-tool-icon">▣</span><span class="admin-tool-copy"><strong>Payment Approval</strong><small>Verify submitted payments</small></span>{% if admin_nav_counts.payments %}<span class="shortcut-count">{{admin_nav_counts.payments}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_pick_winners')}}"><span class="admin-tool-icon">🏆</span><span class="admin-tool-copy"><strong>Pick Winners</strong><small>Draw for fully paid periods</small></span>{% if admin_nav_counts.pick_winners %}<span class="shortcut-count">{{admin_nav_counts.pick_winners}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('recent_winners')}}"><span class="admin-tool-icon">🎁</span><span class="admin-tool-copy"><strong>Recently Winner</strong><small>Confirm prize payouts</small></span>{% if admin_nav_counts.payouts %}<span class="shortcut-count">{{admin_nav_counts.payouts}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+    </div>
+  </section>
+
+  <section class="admin-tools-group">
+    <h2>Ekub management</h2>
+    <div class="admin-tools-grid">
+      <a class="admin-tool-card" href="{{url_for('create_ekub')}}"><span class="admin-tool-icon">＋</span><span class="admin-tool-copy"><strong>Create Ekub</strong><small>Set up a new group</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_full_ekubs')}}"><span class="admin-tool-icon">✓</span><span class="admin-tool-copy"><strong>Full Ekubs</strong><small>View groups at capacity</small></span>{% if admin_nav_counts.full_ekubs %}<span class="shortcut-count">{{admin_nav_counts.full_ekubs}}</span>{% endif %}<span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_payment_status')}}"><span class="admin-tool-icon">◷</span><span class="admin-tool-copy"><strong>Payment Status</strong><small>Review started Ekub schedules</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('finished_ekubs')}}"><span class="admin-tool-icon">✓</span><span class="admin-tool-copy"><strong>Finished Ekubs</strong><small>Browse completed groups</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_members')}}"><span class="admin-tool-icon">♙</span><span class="admin-tool-copy"><strong>Member Info</strong><small>View approved members</small></span><span class="admin-tool-arrow">→</span></a>
+    </div>
+  </section>
+
+  <section class="admin-tools-group">
+    <h2>Site and account</h2>
+    <div class="admin-tools-grid">
+      <a class="admin-tool-card" href="{{url_for('admin_dashboard')}}"><span class="admin-tool-icon">⌂</span><span class="admin-tool-copy"><strong>Admin Dashboard</strong><small>Return to the admin overview</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_visits')}}"><span class="admin-tool-icon">◷</span><span class="admin-tool-copy"><strong>Visits</strong><small>View app and website analytics</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_ads')}}"><span class="admin-tool-icon">▧</span><span class="admin-tool-copy"><strong>Publish Ads</strong><small>Manage website and app ads</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('partners')}}"><span class="admin-tool-icon">♧</span><span class="admin-tool-copy"><strong>Add Partner</strong><small>Create and manage admin partners</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_suspend_members')}}"><span class="admin-tool-icon">⏸</span><span class="admin-tool-copy"><strong>Suspended Members</strong><small>Manage member access</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card" href="{{url_for('admin_deleted_accounts')}}"><span class="admin-tool-icon">▤</span><span class="admin-tool-copy"><strong>Deleted Accounts</strong><small>Review account deletion records</small></span><span class="admin-tool-arrow">→</span></a>
+      <a class="admin-tool-card admin-tool-secure" href="{{url_for('settings')}}"><span class="admin-tool-icon">🛡</span><span class="admin-tool-copy"><strong>Security &amp; Settings</strong><small>Protect and configure your account</small></span><span class="admin-tool-arrow">→</span></a>
+    </div>
+  </section>
+</main>
+<style>
+.admin-tools-page{width:min(1240px,calc(100% - 36px));margin:36px auto 70px;color:var(--text)}
+.admin-tools-heading{padding:28px 30px;margin-bottom:26px;border:1px solid var(--border);border-radius:24px;background:linear-gradient(135deg,rgba(71,173,116,.15),rgba(70,177,203,.12))}
+.admin-tools-kicker{color:#38b86a;font-size:.76rem;font-weight:900;letter-spacing:.14em}
+.admin-tools-heading h1{margin:7px 0;font-size:clamp(2rem,4vw,3.1rem)}.admin-tools-heading p{margin:0;color:var(--muted)}
+.admin-tools-group{margin:26px 0}.admin-tools-group h2{margin:0 0 13px;font-size:1.2rem}
+.admin-tools-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:12px}
+.admin-tool-card{display:flex;align-items:center;gap:12px;min-width:0;padding:15px 16px;border:1px solid var(--border);border-radius:17px;background:var(--surface);color:var(--text);text-decoration:none;box-shadow:var(--shadow);transition:transform .16s,border-color .16s}
+.admin-tool-card:hover{transform:translateY(-2px);border-color:var(--green)}
+.admin-tool-icon{display:grid;place-items:center;flex:0 0 42px;height:42px;border-radius:14px;background:rgba(44,168,100,.12);color:var(--green);font-size:20px;font-weight:900}
+.admin-tool-copy{display:grid;gap:3px;min-width:0;flex:1}.admin-tool-copy strong{font-size:.96rem}.admin-tool-copy small{color:var(--muted);font-size:.78rem}
+.admin-tool-arrow{color:var(--muted);font-size:19px}.admin-tool-secure{border-color:rgba(217,153,44,.4)}.admin-tool-secure .admin-tool-icon{background:rgba(217,153,44,.14);color:#b87818}
+@media(max-width:600px){.admin-tools-page{width:calc(100% - 26px);margin:22px auto 50px}.admin-tools-heading{padding:22px 19px}.admin-tools-grid{grid-template-columns:1fr}.admin-tool-card{padding:13px}}
+</style>
+{% endblock %}

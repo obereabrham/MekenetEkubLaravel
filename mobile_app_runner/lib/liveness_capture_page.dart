@@ -2,15 +2,20 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'package:camera/camera.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide Text;
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'app_translation.dart';
+
+typedef Text = LocalizedText;
 
 const _liveGreen = Color(0xFF88B44A);
 const _liveSky = Color(0xFF43B5D4);
 
 class LivenessCapturePage extends StatefulWidget {
-  const LivenessCapturePage({super.key});
+  const LivenessCapturePage({required this.referencePhotoPath, super.key});
+
+  final String referencePhotoPath;
   @override
   State<LivenessCapturePage> createState() => _LivenessCapturePageState();
 }
@@ -18,7 +23,7 @@ class LivenessCapturePage extends StatefulWidget {
 class _LivenessCapturePageState extends State<LivenessCapturePage>
     with WidgetsBindingObserver {
   static const _steps = [
-    'Center your face in the guide and hold still.',
+    'Check that your photo shows one face, then center your live face and hold still.',
     'Blink both eyes naturally two times.',
     'Turn your head left, then right, then face forward.',
   ];
@@ -43,7 +48,8 @@ class _LivenessCapturePageState extends State<LivenessCapturePage>
   bool _eyesClosed = false, _leftTurn = false, _rightTurn = false;
   DateTime? _centerSince;
   String? _error;
-  String _status = 'Position your face inside the guide.';
+  String _status =
+      'One clear face was detected in your photo. Center your live face in the guide.';
 
   @override
   void initState() {
@@ -73,6 +79,17 @@ class _LivenessCapturePageState extends State<LivenessCapturePage>
     });
     CameraController? controller;
     try {
+      final referenceFaces = await _detector.processImage(
+        InputImage.fromFilePath(widget.referencePhotoPath),
+      );
+      if (referenceFaces.length != 1) {
+        throw Exception(
+          referenceFaces.isEmpty
+              ? 'The personal photo needs one clear, forward-facing face.'
+              : 'Use a personal photo that shows only your face.',
+        );
+      }
+
       final cameras = await availableCameras();
       if (cameras.isEmpty)
         throw Exception('No camera was found on this device.');
@@ -331,10 +348,11 @@ class _LivenessCapturePageState extends State<LivenessCapturePage>
     _leftTurn = false;
     _rightTurn = false;
     _status = switch (_step) {
-      0 => 'Position your face inside the guide.',
+      0 =>
+        'One face was found in your personal photo. Center your live face and hold still.',
       1 => 'Look at the camera and blink naturally twice.',
       2 => 'Slowly turn your head left, then right.',
-      _ => 'The live face check is complete.',
+      _ => 'Live face check complete.',
     };
   }
 

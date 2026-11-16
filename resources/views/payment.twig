@@ -103,16 +103,16 @@
     <p class="pay-note">Enter the ETB value. For Binance Pay, the exact USDT amount is calculated below.</p>
 
     <div class="manual-section">
-      <h2>Confirm your transfer</h2>
+      <h2>Confirm you paid</h2>
       <label for="transactionNumber">Transaction ID / reference</label>
       <input name="transaction_no" id="transactionNumber" maxlength="191" autocomplete="off" placeholder="Enter the reference on your receipt" required>
       <div class="receipt-box">
-        <label for="receiptUpload" style="margin-top:0">Attach a transfer receipt</label>
+        <label for="receiptUpload" style="margin-top:0">Attach a receipt image</label>
         <input id="receiptUpload" type="file" name="screenshot" required accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp">
-        <p class="pay-note">JPG, PNG, or WebP up to 8 MB. The receipt must show the transaction ID and amount.</p>
+        <p class="pay-note">JPG, PNG, or WebP up to 1 MB. The receipt must show the transaction ID and amount.</p>
       </div>
       <div class="terms-box"><input type="checkbox" name="terms_accepted" value="1" id="termsAccepted" required><label for="termsAccepted">I confirm I transferred this amount to the account shown. I understand the payment stays pending until an administrator reviews the receipt and transaction ID.</label></div>
-      <button class="confirm-btn" type="submit">Submit for admin verification</button>
+      <button class="confirm-btn" type="submit">Confirm my payment</button>
       <p class="pay-note" style="text-align:center;margin-top:10px">Do not send money to any account other than the one displayed above.</p>
     </div>
   </form>
@@ -132,9 +132,9 @@
   function renderDestination(){
     const method=selectedMethod(), account=accounts[method]||'', binance=method==='Binance Pay';
     destination.textContent=account||'Account not configured';
-    document.getElementById('accountHolder').textContent=holder ? 'Account holder: '+holder : '';
+    document.getElementById('accountHolder').textContent=holder ? 'Account holder name: '+holder : '';
     currencyLabel.textContent=binance?'USDT':'ETB';
-    rateNote.textContent=binance ? (rate>0 ? 'Send exactly '+((parseFloat(amountInput.value)||0)/rate).toFixed(8)+' USDT · Rate: 1 USDT = '+rate.toFixed(2)+' ETB' : 'Binance conversion rate is not configured yet.') : 'Send the ETB amount shown above. An administrator will verify your transfer.';
+    rateNote.textContent=binance ? (rate>0 ? 'Send exactly '+((parseFloat(amountInput.value)||0)/rate).toFixed(8)+' USDT · Rate: 1 USDT = '+rate.toFixed(2)+' ETB' : 'Binance conversion rate is not configured yet.') : 'Transfer '+(parseFloat(amountInput.value)||0).toFixed(2)+' ETB to this account. Admin will verify the receipt.';
     copyTransferAmount.style.display=binance&&rate>0?'inline-flex':'none';
     submit.disabled=!account||(binance&&rate<=0);
   }

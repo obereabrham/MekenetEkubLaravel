@@ -99,7 +99,9 @@
                 data-name="{{ekub['name']|lower}}"
             >
 
-                <div class="ekub-card-top">
+                <div class="ekub-card-top{% if ekub['merchant_banner']|default(null) %} has-merchant-banner{% endif %}">
+
+                    {% if ekub['merchant_banner']|default(null) %}<img class="ekub-merchant-banner" src="{{ekub['merchant_banner']}}" alt="{{ekub['category']}} Ekub banner" loading="lazy">{% endif %}
 
                     <div class="ekub-icon">
                         {% if ekub['category'] == 'Student' %}

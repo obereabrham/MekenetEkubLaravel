@@ -16,7 +16,10 @@ class UploadStorage
 
     public function put(UploadedFile $file, string $path): string
     {
-        if (str_starts_with(strtolower((string) $file->getMimeType()), 'image/') && $file->getSize() > 1024 * 1024) {
+        $extension = strtolower($file->getClientOriginalExtension() ?: $file->extension() ?: '');
+        $imageExtensions = ['avif', 'bmp', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp'];
+        $isImage = str_starts_with(strtolower((string) $file->getMimeType()), 'image/') || in_array($extension, $imageExtensions, true);
+        if ($isImage && $file->getSize() > 1024 * 1024) {
             throw new RuntimeException('Images must be 1 MB or smaller.');
         }
 
@@ -34,6 +37,23 @@ class UploadStorage
         }
 
         return $path;
+    }
+
+    public function userPath(string $username, int $userId, string $folder, string $filename): string
+    {
+        $username = mb_strtolower(trim($username));
+        $username = preg_replace('/[^\pL\pN._-]+/u', '-', $username) ?? '';
+        $username = trim(mb_substr($username, 0, 64), '.-_');
+        $username = $username !== '' ? $username : 'member';
+        $folder = self::normalizePath($folder);
+        $filename = basename(str_replace('\\', '/', $filename));
+
+        return self::normalizePath('users/'.$username.'-u'.$userId.'/'.$folder.'/'.$filename);
+    }
+
+    public function putForUser(UploadedFile $file, string $username, int $userId, string $folder, string $filename): string
+    {
+        return $this->put($file, $this->userPath($username, $userId, $folder, $filename));
     }
 
     public function exists(string $path): bool
@@ -73,8 +93,11 @@ class UploadStorage
     public static function isPrivatePath(string $path): bool
     {
         $path = ltrim(str_replace('\\', '/', $path), '/');
-        $first = strtolower(explode('/', $path, 2)[0] ?? '');
+        $segments = explode('/', $path);
+        $first = strtolower($segments[0] ?? '');
         if (in_array($first, ['ads', 'ekub_items', 'profile'], true)) return false;
+        if ($first === 'static' && strtolower($segments[1] ?? '') === 'uploads' && in_array(strtolower($segments[2] ?? ''), ['ads', 'ekub_items', 'profile'], true)) return false;
+        if ($first === 'users' && in_array(strtolower($segments[2] ?? ''), ['ads', 'ekub_items', 'profile'], true)) return false;
 
         // Older website profile uploads were stored at the uploads root.
         if (! str_contains($path, '/') && preg_match('/\.(png|jpe?g|webp|gif)$/i', $path) && ! str_starts_with(strtolower($path), 'payment-')) {

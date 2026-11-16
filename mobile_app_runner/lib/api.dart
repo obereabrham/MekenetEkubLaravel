@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -48,6 +49,18 @@ class ApiClient {
     await _storage.delete(key: 'mekenet_access_token');
   }
 
+  Future<String> _visitorId() async {
+    final saved = await _storage.read(key: 'mekenet_analytics_visitor_id');
+    if (saved != null && saved.isNotEmpty) return saved;
+    final random = math.Random.secure();
+    final generated = List.generate(
+      24,
+      (_) => random.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
+    await _storage.write(key: 'mekenet_analytics_visitor_id', value: generated);
+    return generated;
+  }
+
   Future<Map<String, dynamic>> get(String path, {bool authenticated = true}) =>
       _request('GET', path, authenticated: authenticated);
 
@@ -69,6 +82,7 @@ class ApiClient {
       Uri.parse('$baseUrl/api/v1$path'),
     );
     request.headers['Accept'] = 'application/json';
+    request.headers['X-Visitor-Id'] = await _visitorId();
     if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
     request.fields.addAll(fields);
     for (final entry in files.entries) {
@@ -121,6 +135,7 @@ class ApiClient {
     final headers = <String, String>{
       'Accept': 'application/json',
       'Content-Type': 'application/json',
+      'X-Visitor-Id': await _visitorId(),
     };
 
     if (authenticated && _token != null) {

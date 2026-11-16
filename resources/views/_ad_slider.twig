@@ -1,7 +1,7 @@
 {% if site_ads and me and me.role == 'member' %}
 <div class="ad-slider" id="adSlider" aria-label="Advertisements">
   <div class="ad-track" id="adTrack">
-    {% for img in site_ads %}<div class="ad-slide"><img src="{{url_for('static', filename: 'uploads/' ~ img)}}" alt="Advertisement {{loop.index}}"></div>{% endfor %}
+    {% for img in site_ads %}<div class="ad-slide"><img src="{{url_for('uploads', name: img)}}" alt="Advertisement {{loop.index}}"></div>{% endfor %}
   </div>
   {% if site_ads|length > 1 %}
   <div class="ad-dots">{% for img in site_ads %}<button type="button" class="ad-dot{% if loop.first %} active{% endif %}" data-i="{{loop.index0}}" aria-label="Ad {{loop.index}}"></button>{% endfor %}</div>

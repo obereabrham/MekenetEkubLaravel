@@ -82,16 +82,20 @@ class AppServiceProvider extends ServiceProvider
         $this->app['view']->addExtension('twig','twig');
         View::composer('*',function($view){
             $me=app(\App\Http\Controllers\WebsiteController::class)->currentUser();
-            $stats=['members'=>0,'ekubs'=>0,'payouts'=>0,'profit'=>0,'collected'=>0];$ads=[];$permissions=[];$pending=0;
+            $stats=['members'=>0,'ekubs'=>0,'payouts'=>0,'profit'=>0,'collected'=>0];$ads=[];$permissions=[];$pending=0;$adminNavCounts=[];
             try{
                 $stats=['members'=>DB::table('users')->where('role','member')->where('status','active')->count(),'ekubs'=>DB::table('ekubs')->count(),'payouts'=>(float)DB::table('payouts')->sum('net_amount'),'profit'=>(float)DB::table('payouts')->sum('service_fee'),'collected'=>(float)DB::table('payments')->where('status','approved')->sum('approved_amount')];
                 $ads=DB::table('ads')->orderBy('slot')->pluck('image')->all();
-                if($me&&$me['role']==='admin')$pending=DB::table('ekub_applications')->where('status','pending')->count();
+                if($me&&$me['role']==='admin'){
+                    $adminNavCounts=app(\App\Http\Controllers\WebsiteController::class)->adminNavigationCounts();
+                    $pending=$adminNavCounts['applications'] ?? 0;
+                }
                 if($me&&$me['role']==='partner')$permissions=array_values(array_filter(explode(',',DB::table('partners')->where('user_id',$me['id'])->value('permissions')??'')));
             }catch(\Throwable){}
             $view->with(['me'=>$me,'user'=>$me,'full_name'=>$me?trim($me['first_name'].' '.$me['last_name']):'',
                 'stats'=>$stats,'registered_members'=>$stats['members'],'created_ekubs'=>$stats['ekubs'],'total_payouts'=>$stats['payouts'],
                 'kyc_status'=>$me['kyc_status']??null,'partner_permissions'=>$permissions,'pending_applications'=>$pending,'site_ads'=>$ads,
+                'admin_nav_counts'=>$adminNavCounts,
                 'categories'=>config('ekub.categories'),'frequencies'=>config('ekub.frequencies'),'methods'=>config('ekub.methods')]);
         });
     }

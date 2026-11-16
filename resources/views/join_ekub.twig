@@ -1,1 +1,23 @@
-{% extends 'base.twig' %}{% block content %}<div class="card form-card"><h1>Join {{ekub.name}}</h1><p>Base amount: {{ekub.base_amount}} ETB. Choose your share.</p><form method="post">{{ csrf_field() }}{% if ekub.is_item %}<input type="hidden" name="share_type" value="full"><div class="card"><b>Item Ekub is Full Share only.</b></div>{% else %}<label>Share Type</label><select name="share_type"><option value="full">Full — {{ekub.base_amount}} ETB</option><option value="half">Half — {{ekub.base_amount*0.5}} ETB</option><option value="quarter">Quarter — {{ekub.base_amount*0.25}} ETB</option></select>{% endif %}<button class="btn">Confirm Join</button></form></div>{% endblock %}
+{% extends 'base.twig' %}{% block content %}
+<div class="card form-card merchant-join-card">
+  <span class="merchant-kicker">{% if merchant_owned %}Merchant hosted Ekub{% else %}Ekub membership{% endif %}</span>
+  <h1>Join {{ekub.name}}</h1>
+  <p>Contribution: <strong>{{ekub.base_amount}} ETB</strong> · {{ekub.frequency}} · {{ekub.duration}} periods</p>
+  {% if merchant_owned %}
+    <p>This private Ekub requires an invite code and merchant approval. Your membership starts only after approval.</p>
+    {% if join_request and join_request.status == 'pending' %}<div class="merchant-notice">Your request is waiting for merchant approval.</div>
+    {% elseif join_request and join_request.status == 'approved' %}<div class="merchant-notice">You are already approved for this Ekub.</div>
+    {% else %}
+      <form method="post">{{ csrf_field() }}
+        <label for="join-code">Merchant invite code</label><input id="join-code" name="join_code" autocomplete="one-time-code" minlength="6" maxlength="20" required>
+        {% if ekub.is_item %}<input type="hidden" name="share_type" value="full"><div class="card"><b>Item Ekub uses a full share.</b></div>{% else %}<label>Share type</label><select name="share_type"><option value="full">Full — {{ekub.base_amount}} ETB</option><option value="half">Half — {{ekub.base_amount*0.5}} ETB</option><option value="quarter">Quarter — {{ekub.base_amount*0.25}} ETB</option></select>{% endif %}
+        <button class="btn btn-primary" type="submit">Request to join</button>
+      </form>
+    {% endif %}
+  {% else %}
+    <p>Choose your share for this Ekub.</p>
+    <form method="post">{{ csrf_field() }}{% if ekub.is_item %}<input type="hidden" name="share_type" value="full"><div class="card"><b>Item Ekub is Full Share only.</b></div>{% else %}<label>Share Type</label><select name="share_type"><option value="full">Full — {{ekub.base_amount}} ETB</option><option value="half">Half — {{ekub.base_amount*0.5}} ETB</option><option value="quarter">Quarter — {{ekub.base_amount*0.25}} ETB</option></select>{% endif %}<button class="btn btn-primary" type="submit">Confirm Join</button></form>
+  {% endif %}
+</div>
+<style>.merchant-join-card{max-width:720px;margin:50px auto;padding:clamp(24px,5vw,42px)}.merchant-kicker{color:var(--green,#65bd84);font-weight:800;text-transform:uppercase;letter-spacing:.12em;font-size:.78rem}.merchant-join-card form{display:grid;gap:12px}.merchant-join-card input,.merchant-join-card select{width:100%;box-sizing:border-box}.merchant-notice{padding:15px;border-radius:14px;background:rgba(104,190,134,.14);font-weight:700}</style>
+{% endblock %}

@@ -5,6 +5,11 @@
   <p class="settings-sub">Manage your password, read our policies{% if me and me.role == 'member' %} or delete your account{% endif %}.</p>
 
   <section class="settings-card">
+    <div class="settings-row settings-language-row">
+      <span class="settings-row-icon">&#127760;</span>
+      <span class="settings-row-text"><strong>Language</strong><small>Choose your preferred language. Saved in this browser.</small></span>
+      <label class="settings-language-control" for="siteLanguage"><span class="sr-only">Language</span><select id="siteLanguage" name="language"><option value="AM">አማ</option><option value="ORO">ORO</option><option value="EN" selected>EN</option></select></label>
+    </div>
     <details class="settings-details" {% if request.args.get('open') == 'password' %}open{% endif %}>
       <summary><span class="settings-row-icon">&#128274;</span><span class="settings-row-text"><strong>Change Password</strong><small>Use a strong password you do not use anywhere else.</small></span><span class="settings-chevron">&rsaquo;</span></summary>
       <form method="post" action="{{url_for('change_password')}}" class="pm-form" autocomplete="off">{{ csrf_field() }}
@@ -39,7 +44,7 @@
         <button class="btn btn-primary" type="submit">Update username</button>
       </form>
     </details>
-    <a class="settings-row" href="{{url_for('security_2fa')}}"><span class="settings-row-icon">&#128241;</span><span class="settings-row-text"><strong>Two-factor security</strong><small>{% if twofa_on %}{% if twofa_method == 'email' %}Email OTP enabled.{% else %}Authenticator app enabled.{% endif %}{% else %}Not enabled - configure an authenticator app or email OTP.{% endif %}</small></span><span class="settings-chevron">&rsaquo;</span></a>
+    <a class="settings-row" href="{{url_for('security_2fa')}}"><span class="settings-row-icon">&#128737;</span><span class="settings-row-text"><strong>Two-step verification</strong><small>{% if twofa_on %}{% if twofa_method == 'both' %}Email OTP and authenticator enabled. Choose either at sign-in.{% elseif twofa_method == 'email' %}Email OTP enabled.{% else %}Authenticator app enabled.{% endif %}{% else %}Not enabled - configure email OTP, an authenticator app, or both.{% endif %}</small></span><span class="settings-chevron">&rsaquo;</span></a>
     {% endif %}
     <a class="settings-row" href="{{url_for('terms')}}"><span class="settings-row-icon">&#128196;</span><span class="settings-row-text"><strong>Terms of Service</strong><small>Service fee, late payment and verification rules.</small></span><span class="settings-chevron">&rsaquo;</span></a>
     <a class="settings-row" href="{{url_for('privacy')}}"><span class="settings-row-icon">&#128737;</span><span class="settings-row-text"><strong>Privacy Policy</strong><small>How we collect, use and protect your information.</small></span><span class="settings-chevron">&rsaquo;</span></a>
@@ -91,4 +96,25 @@
   </script>
   {% endif %}
 </div>
+<script>
+(function(){
+  var select=document.getElementById('siteLanguage');
+  if(!select)return;
+  var allowed=['AM','ORO','EN'];
+  try{var saved=localStorage.getItem('mekenet_language');if(allowed.indexOf(saved)!==-1)select.value=saved;else select.value='EN';}catch(e){select.value='EN';}
+  function updateLanguage(code){document.documentElement.lang=code==='AM'?'am':code==='ORO'?'om':'en';}
+  updateLanguage(select.value);
+  select.addEventListener('change',function(){
+    var code=allowed.indexOf(select.value)!==-1?select.value:'EN';
+    try{localStorage.setItem('mekenet_language',code);}catch(e){}
+    updateLanguage(code);
+  });
+})();
+</script>
+<style>
+.settings-language-row{cursor:default}.settings-language-row:hover{background:transparent}
+.settings-language-control{margin-left:auto;flex:0 0 auto}
+.settings-language-control select{min-width:88px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--input-bg,var(--surface-2));color:var(--text);font:inherit;font-weight:800}
+@media(max-width:520px){.settings-language-row{gap:9px}.settings-language-row .settings-row-text small{max-width:25ch}.settings-language-control select{min-width:72px;padding:9px 8px}}
+</style>
 {% endblock %}
